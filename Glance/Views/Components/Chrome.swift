@@ -98,11 +98,24 @@ struct RepositoryHeader: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            IconButton("arrow.down.circle", help: "Fetch origin · 2 min ago") {}
-            IconButton("arrow.up.circle", help: "Push \(worktree.aheadCount) commits") {}
+            pushButton
+        }
+    }
+
+    /// Pushes the current worktree's branch. Pulling is left to the agent, which can resolve conflicts.
+    @ViewBuilder private var pushButton: some View {
+        let changes = model.changes(for: model.currentWorktree)
+        let ahead = changes.upstream?.ahead ?? 0
+        if changes.isPushing {
+            ProgressView()
+                .controlSize(.small)
+                .frame(width: 28, height: 28)
+        } else {
+            IconButton("arrow.up.circle", help: pushHelp(changes), action: changes.push)
+                .disabled(model.currentRepository?.host == nil || (changes.upstream != nil && ahead == 0))
                 .overlay(alignment: .topTrailing) {
-                    if worktree.aheadCount > 0 {
-                        Text("\(worktree.aheadCount)")
+                    if ahead > 0 {
+                        Text("\(ahead)")
                             .font(.system(size: 9.5, weight: .bold))
                             .foregroundStyle(.white)
                             .frame(minWidth: 14, minHeight: 14)
@@ -111,6 +124,16 @@ struct RepositoryHeader: View {
                             .allowsHitTesting(false)
                     }
                 }
+        }
+    }
+
+    private func pushHelp(_ changes: ChangesModel) -> String {
+        guard model.currentRepository?.host != nil else { return "No remote to push to" }
+        guard let upstream = changes.upstream else { return "Push \(model.currentWorktree.branch) to origin" }
+        switch upstream.ahead {
+        case 0: return "Nothing to push"
+        case 1: return "Push 1 commit"
+        default: return "Push \(upstream.ahead) commits"
         }
     }
 }

@@ -3,6 +3,7 @@
 //  Glance
 //
 
+import AppKit
 import SwiftUI
 
 struct FileEditor: View {
@@ -69,11 +70,20 @@ struct FileEditor: View {
                 ) {
                     model.copy(path, as: .path)
                 }
-                IconButton("folder", help: "Reveal in Finder") {}
-                IconButton("arrow.up.forward.square", help: "Open in Editor (⌘O)") {}
+                IconButton("folder", help: "Reveal in Finder") { revealInFinder(path) }
             } else {
                 Spacer()
             }
+        }
+    }
+
+    /// Selects the file in Finder, or opens the worktree's folder when the file isn't there.
+    private func revealInFinder(_ path: String) {
+        let url = model.currentWorktree.url.appending(path: path)
+        if FileManager.default.fileExists(atPath: url.path) {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } else {
+            NSWorkspace.shared.open(model.currentWorktree.url)
         }
     }
 }

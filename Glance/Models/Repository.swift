@@ -46,6 +46,8 @@ struct ChangedFile: Identifiable {
     /// How long ago an agent last wrote this file, while it's still being edited.
     var agentEditedAgo: String?
     var isStaged = false
+    /// The positions of the hunks that are staged as shown.
+    var stagedHunks: Set<Int> = []
     var isViewed = false
 
     var id: String { diff.path }
@@ -56,8 +58,6 @@ struct Worktree: Identifiable {
     let branch: String
     let url: URL
     var isAgentActive = false
-    var aheadCount = 0
-    var behindCount = 0
 
     var id: String { url.path }
     /// The folder, with the home folder abbreviated to "~".

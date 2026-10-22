@@ -21,11 +21,14 @@ final class ChangesModel {
     private(set) var files: [ChangedFile] = []
     /// `false` until git has been read once, so a clean worktree isn't announced before it's known.
     private(set) var isLoaded = false
+    /// How far the branch is ahead of and behind its upstream, or `nil` when it doesn't track one.
+    private(set) var upstream: (ahead: Int, behind: Int)?
+    private(set) var isPushing = false
     var selectedPath: String?
     var stagedPaths: Set<String> = []
     var viewedPaths: Set<String> = []
     var filter = ""
-    /// Shows why git refused to stage or unstage.
+    /// Shows why git refused to stage, discard or push.
     @ObservationIgnored var onError: (String, Error) -> Void = { _, _ in }
 
     @ObservationIgnored private var watcher: FileWatcher?
@@ -64,8 +67,10 @@ final class ChangesModel {
                 case .workingTree: try await WorkingTreeReader.read(url)
                 case let .branch(name, base): try await WorkingTreeReader.read(branch: name, base: base, in: url)
                 }
+                let upstream = isReadOnly ? nil : await WorkingTreeReader.readUpstream(url)
                 guard !Task.isCancelled else { return }
                 apply(changes.map(changedFile))
+                self.upstream = upstream
             } catch {
                 guard !Task.isCancelled else { return }
                 apply([])
@@ -78,12 +83,13 @@ final class ChangesModel {
         if let cached = cache[change.path], cached.hunks == change.hunks, cached.file.diff.status == change.status {
             var file = cached.file
             file.isStaged = change.isStaged
+            file.stagedHunks = change.stagedHunks
             return file
         }
         let diff = change.hunks.map { hunks in
-            FileDiff(change.path, change.status, hunks: hunks.map { RawHunk(oldStart: $0.oldStart, newStart: $0.newStart, context: $0.context, lines: $0.lines) })
+            FileDiff(change.path, change.status, hunks: hunks.map { RawHunk(oldStart: $0.oldStart, newStart: $0.newStart, context: $0.context, lines: $0.displayLines) })
         } ?? FileDiff(change.path, change.status, additions: 0, deletions: 0)
-        let file = ChangedFile(diff: diff, isStaged: change.isStaged)
+        let file = ChangedFile(diff: diff, isStaged: change.isStaged, stagedHunks: change.stagedHunks)
         cache[change.path] = (change.hunks, file)
         return file
     }
@@ -164,6 +170,86 @@ final class ChangesModel {
             } catch {
                 onError(staged ? "Couldn’t Stage Files" : "Couldn’t Unstage Files", error)
             }
+            refresh()
+        }
+    }
+
+    // MARK: Hunks
+
+    /// A new or deleted file is one hunk, so it's staged and discarded as a whole.
+    private func isWholeFile(_ file: ChangedFile) -> Bool {
+        file.diff.status != .modified || cache[file.id]?.hunks == nil
+    }
+
+    func isStaged(hunk index: Int, in file: ChangedFile) -> Bool {
+        isWholeFile(file) ? isStaged(file) : file.stagedHunks.contains(index)
+    }
+
+    func toggleStaged(hunk index: Int, in file: ChangedFile) {
+        guard !isWholeFile(file) else { return setStaged(file, !isStaged(file)) }
+        let reverse = isStaged(hunk: index, in: file)
+        applyHunk(index, of: file, failure: reverse ? "Couldn’t Unstage Hunk" : "Couldn’t Stage Hunk") { patch in
+            [["apply", "--cached", "--whitespace=nowarn"] + (reverse ? ["-R"] : []) + [patch]]
+        }
+    }
+
+    /// Puts the hunk back the way it is in `HEAD`, in the working tree and, if it's staged, the index. A new file
+    /// goes to the Trash.
+    func discard(hunk index: Int, in file: ChangedFile) {
+        guard !isWholeFile(file) else { return discardFile(file) }
+        let isStaged = isStaged(hunk: index, in: file)
+        applyHunk(index, of: file, failure: "Couldn’t Discard Hunk") { patch in
+            [["apply", "-R", "--whitespace=nowarn", patch]] + (isStaged ? [["apply", "--cached", "-R", "--whitespace=nowarn", patch]] : [])
+        }
+    }
+
+    /// Writes the hunk as a patch file and runs each git command `commands` makes from its path, in order.
+    private func applyHunk(_ index: Int, of file: ChangedFile, failure: String, commands: @escaping (String) -> [[String]]) {
+        guard !isReadOnly, let hunks = cache[file.id]?.hunks, hunks.indices.contains(index) else { return }
+        let patch = hunks[index].patch(for: file.id)
+        let patchURL = FileManager.default.temporaryDirectory.appending(path: "glance-\(UUID().uuidString).patch")
+        Task { [url] in
+            do {
+                try patch.write(to: patchURL, atomically: true, encoding: .utf8)
+                for arguments in commands(patchURL.path) { try await Git.run(arguments, in: url) }
+            } catch {
+                onError(failure, error)
+            }
+            try? FileManager.default.removeItem(at: patchURL)
+            refresh()
+        }
+    }
+
+    private func discardFile(_ file: ChangedFile) {
+        guard !isReadOnly else { return }
+        Task { [url] in
+            do {
+                if file.diff.status == .added {
+                    try await Git.run(["rm", "--cached", "--force", "--quiet", "--ignore-unmatch", "--", file.id], in: url)
+                    try FileManager.default.trashItem(at: url.appending(path: file.id), resultingItemURL: nil)
+                } else {
+                    try await Git.run(["checkout", "HEAD", "--", file.id], in: url)
+                }
+            } catch {
+                onError("Couldn’t Discard Changes", error)
+            }
+            refresh()
+        }
+    }
+
+    // MARK: Pushing
+
+    /// Pushes the branch, setting `origin` as its upstream the first time.
+    func push() {
+        guard !isReadOnly, !isPushing else { return }
+        isPushing = true
+        Task { [url, upstream] in
+            do {
+                try await Git.run(upstream == nil ? ["push", "--set-upstream", "origin", "HEAD"] : ["push"], in: url)
+            } catch {
+                onError("Couldn’t Push", error)
+            }
+            isPushing = false
             refresh()
         }
     }

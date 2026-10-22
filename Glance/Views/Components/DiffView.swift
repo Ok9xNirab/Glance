@@ -5,11 +5,20 @@
 
 import SwiftUI
 
+/// What the hunk headers' Stage and Discard buttons do, by hunk position.
+struct HunkActions {
+    let isStaged: (Int) -> Bool
+    let toggleStaged: (Int) -> Void
+    let discard: (Int) -> Void
+    /// Discarding a new file moves it to the Trash rather than editing it.
+    var discardsFile = false
+}
+
 /// Hunks as pinned sections. Place inside a `LazyVStack(pinnedViews: .sectionHeaders)` in a `ScrollView`.
 struct DiffHunksView: View {
     let hunks: [DiffHunk]
     let layout: DiffLayout
-    var showsHunkActions = false
+    var actions: HunkActions?
 
     var body: some View {
         ForEach(hunks) { hunk in
@@ -22,7 +31,7 @@ struct DiffHunksView: View {
                 }
                 Hairline()
             } header: {
-                HunkHeader(hunk: hunk, showsActions: showsHunkActions)
+                HunkHeader(hunk: hunk, actions: actions)
             }
         }
     }
@@ -30,9 +39,10 @@ struct DiffHunksView: View {
 
 private struct HunkHeader: View {
     let hunk: DiffHunk
-    let showsActions: Bool
+    let actions: HunkActions?
     @Environment(\.glanceAccent) private var accent
     @Environment(\.colorScheme) private var colorScheme
+    @State private var isConfirmingDiscard = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -40,12 +50,20 @@ private struct HunkHeader: View {
             Text(hunk.context)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if showsActions {
+            if let actions {
                 HStack(spacing: 6) {
-                    Button("Stage Hunk") {}
-                    Button("Discard") {}
+                    Button(actions.isStaged(hunk.id) ? "Unstage Hunk" : "Stage Hunk") { actions.toggleStaged(hunk.id) }
+                    Button("Discard") { isConfirmingDiscard = true }
                 }
                 .buttonStyle(BezelButtonStyle(height: 22))
+                .confirmationDialog(
+                    actions.discardsFile ? "Move this file to the Trash?" : "Discard this hunk?",
+                    isPresented: $isConfirmingDiscard
+                ) {
+                    Button(actions.discardsFile ? "Move to Trash" : "Discard", role: .destructive) { actions.discard(hunk.id) }
+                } message: {
+                    Text(actions.discardsFile ? "The file is new, so discarding it removes it." : "Its lines go back to how they are in the last commit. This can’t be undone.")
+                }
             }
         }
         .font(.mono(12))

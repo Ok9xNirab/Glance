@@ -16,7 +16,7 @@ struct ChangesDetail: View {
                 toolbar(for: file)
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0, pinnedViews: .sectionHeaders) {
-                        DiffHunksView(hunks: file.diff.hunks ?? [], layout: model.diffLayout, showsHunkActions: !changes.isReadOnly)
+                        DiffHunksView(hunks: file.diff.hunks ?? [], layout: model.diffLayout, actions: hunkActions(for: file))
                     }
                 }
                 .id(file.id)
@@ -57,8 +57,17 @@ struct ChangesDetail: View {
                 action: changes.toggleViewedForSelection
             )
             CopyForAgentButton()
-            IconButton("arrow.up.forward.square", help: "Open in Editor (⌘O)") {}
         }
+    }
+
+    private func hunkActions(for file: ChangedFile) -> HunkActions? {
+        guard !changes.isReadOnly else { return nil }
+        return HunkActions(
+            isStaged: { changes.isStaged(hunk: $0, in: file) },
+            toggleStaged: { changes.toggleStaged(hunk: $0, in: file) },
+            discard: { changes.discard(hunk: $0, in: file) },
+            discardsFile: file.diff.status == .added
+        )
     }
 
     private func fileSummary(_ file: ChangedFile) -> some View {
@@ -97,7 +106,9 @@ struct ChangesDetail: View {
             }
             if !changes.isReadOnly {
                 Text(worktree.path).font(.mono(11))
-                Text("↑\(worktree.aheadCount) ↓\(worktree.behindCount)")
+                if let upstream = changes.upstream {
+                    Text("↑\(upstream.ahead) ↓\(upstream.behind)")
+                }
             }
             Spacer(minLength: 0)
             ShortcutHint(keys: ["J", "K"], label: "files")

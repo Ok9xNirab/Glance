@@ -11,13 +11,36 @@ nonisolated struct WorkingTreeChange: Sendable {
         let oldStart: Int
         let newStart: Int
         let context: String
+        /// Prefixed with `+`, `-` or a space, plus git's "\ No newline at end of file" markers, so the hunk can be
+        /// written back out as a patch.
         let lines: [String]
+
+        /// The lines to show, without the markers.
+        var displayLines: [String] { lines.filter { !$0.hasPrefix("\\") } }
+
+        /// A patch of just this hunk, for `git apply`.
+        func patch(for path: String) -> String {
+            let oldCount = lines.count { $0.first == " " || $0.first == "-" }
+            let newCount = lines.count { $0.first == " " || $0.first == "+" }
+            // Git ends a name containing a space with a tab, so the tab is where it stops reading.
+            let name = path.contains(" ") ? path + "\t" : path
+            return """
+                diff --git a/\(path) b/\(path)
+                --- a/\(name)
+                +++ b/\(name)
+                @@ -\(oldStart),\(oldCount) +\(newStart),\(newCount) @@
+                \(lines.joined(separator: "\n"))
+
+                """
+        }
     }
 
     let path: String
     let status: FileStatus
     /// Every change is in the index, so committing now would include all of it.
     let isStaged: Bool
+    /// The positions of the hunks that are in the index exactly as shown.
+    var stagedHunks: Set<Int> = []
     /// `nil` for binary files and files too large to show.
     let hunks: [Hunk]?
 }
@@ -40,15 +63,20 @@ nonisolated enum WorkingTreeReader {
         guard !entries.isEmpty else { return [] }
 
         let base = (try? await Git.run(["rev-parse", "--verify", "--quiet", "HEAD"], in: worktree)) == nil ? emptyTree : "HEAD"
-        let diff = try await Git.run(git + ["diff", base] + diffOptions, in: worktree)
-        let hunksByPath = parseDiff(diff).mapValues(\.hunks)
+        async let diff = Git.run(git + ["diff", base] + diffOptions, in: worktree)
+        async let stagedDiff = Git.run(git + ["diff", "--cached", base] + diffOptions, in: worktree)
+        let hunksByPath = try await parseDiff(diff).mapValues(\.hunks)
+        let stagedHunksByPath = try await parseDiff(stagedDiff).mapValues(\.hunks)
 
         return entries.map { entry in
             if entry.isUntracked {
                 return WorkingTreeChange(path: entry.path, status: .added, isStaged: false, hunks: untrackedHunks(worktree.appending(path: entry.path)))
             }
             let status: FileStatus = entry.code.contains("D") ? .deleted : entry.code.contains("A") ? .added : .modified
-            return WorkingTreeChange(path: entry.path, status: status, isStaged: entry.isStaged, hunks: hunksByPath[entry.path] ?? [])
+            let hunks = hunksByPath[entry.path] ?? []
+            let staged = stagedHunksByPath[entry.path].flatMap(\.self) ?? []
+            let stagedHunks = hunks.map { hunks in hunks.indices.filter { staged.contains(hunks[$0]) } } ?? []
+            return WorkingTreeChange(path: entry.path, status: status, isStaged: entry.isStaged, stagedHunks: Set(stagedHunks), hunks: hunks)
         }
         .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
     }
@@ -60,6 +88,14 @@ nonisolated enum WorkingTreeReader {
         return parseDiff(diff)
             .map { WorkingTreeChange(path: $0.key, status: $0.value.status, isStaged: false, hunks: $0.value.hunks) }
             .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    }
+
+    /// How many commits `HEAD` is ahead of and behind its upstream, or `nil` when the branch doesn't track one.
+    static func readUpstream(_ worktree: URL) async -> (ahead: Int, behind: Int)? {
+        guard let output = try? await Git.run(git + ["rev-list", "--left-right", "--count", "HEAD...@{upstream}"], in: worktree)
+        else { return nil }
+        let counts = output.split(whereSeparator: \.isWhitespace).compactMap { Int($0) }
+        return counts.count == 2 ? (counts[0], counts[1]) : nil
     }
 
     // MARK: Status
@@ -108,7 +144,7 @@ nonisolated enum WorkingTreeReader {
         for line in output.split(separator: "\n", omittingEmptySubsequences: false) {
             if line.hasPrefix("diff --git ") {
                 finishFile()
-            } else if current != nil, let first = line.first, first == "+" || first == "-" || first == " " {
+            } else if current != nil, let first = line.first, first == "+" || first == "-" || first == " " || first == "\\" {
                 current?.lines.append(String(line))
             } else if line.hasPrefix("@@ ") {
                 finishHunk()
@@ -129,7 +165,7 @@ nonisolated enum WorkingTreeReader {
                     path = String(name.dropFirst(2))
                 }
             }
-            // Other lines are headers ("index", "new file mode") or "\ No newline at end of file".
+            // Other lines are headers, such as "index".
         }
         finishFile()
         return result
