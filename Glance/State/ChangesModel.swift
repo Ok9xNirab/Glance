@@ -6,10 +6,18 @@
 import Foundation
 import Observation
 
-/// Review state for one worktree's uncommitted changes, read from git and refreshed whenever its files change.
+/// Review state for one worktree's uncommitted changes, read from git and refreshed whenever its files change, or,
+/// read-only, for what a branch changed since it left the main branch.
 @Observable
 final class ChangesModel {
+    enum Source {
+        case workingTree
+        case branch(name: String, base: String)
+    }
+
+    /// The worktree, or for a branch the repository.
     let url: URL
+    let source: Source
     private(set) var files: [ChangedFile] = []
     /// `false` until git has been read once, so a clean worktree isn't announced before it's known.
     private(set) var isLoaded = false
@@ -30,13 +38,21 @@ final class ChangesModel {
 
     init(url: URL) {
         self.url = url
+        source = .workingTree
         watcher = FileWatcher(url) { [weak self] in self?.refresh() }
+        refresh()
+    }
+
+    init(branch: String, base: String, repository: URL) {
+        url = repository
+        source = .branch(name: branch, base: base)
         refresh()
     }
 
     /// Initial files that aren't read from git, for previews.
     init(files: [ChangedFile]) {
         url = URL(filePath: "/")
+        source = .workingTree
         apply(files)
         isLoaded = true
     }
@@ -45,9 +61,12 @@ final class ChangesModel {
 
     func refresh() {
         refreshTask?.cancel()
-        refreshTask = Task { [url] in
+        refreshTask = Task { [url, source] in
             do {
-                let changes = try await WorkingTreeReader.read(url)
+                let changes = switch source {
+                case .workingTree: try await WorkingTreeReader.read(url)
+                case let .branch(name, base): try await WorkingTreeReader.read(branch: name, base: base, in: url)
+                }
                 guard !Task.isCancelled else { return }
                 apply(changes.map(changedFile))
             } catch {
@@ -119,6 +138,11 @@ final class ChangesModel {
 
     // MARK: Staging
 
+    /// A branch's changes are already committed, so there's nothing to stage or commit.
+    var isReadOnly: Bool {
+        if case .branch = source { true } else { false }
+    }
+
     var allStaged: Bool { !files.isEmpty && stagedPaths.count == files.count }
 
     func isStaged(_ file: ChangedFile) -> Bool { stagedPaths.contains(file.id) }
@@ -133,7 +157,7 @@ final class ChangesModel {
 
     /// Updates the checkboxes straight away, then stages or unstages the paths and reads git again.
     private func setStaged(_ paths: [String], _ staged: Bool) {
-        guard !paths.isEmpty else { return }
+        guard !paths.isEmpty, !isReadOnly else { return }
         if staged { stagedPaths.formUnion(paths) } else { stagedPaths.subtract(paths) }
         // `--` keeps a path that looks like an option from being read as one.
         let arguments = staged ? ["add", "--all", "--"] : ["reset", "--quiet", "--"]
@@ -163,7 +187,7 @@ final class ChangesModel {
     // MARK: Committing
 
     var canCommit: Bool {
-        !stagedPaths.isEmpty && !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isCommitting
+        !isReadOnly && !stagedPaths.isEmpty && !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isCommitting
     }
 
     /// Commits what's staged with the summary and description as its message, running the user's hooks.

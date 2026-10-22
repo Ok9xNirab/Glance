@@ -25,7 +25,7 @@ struct ChangesColumn: View {
             if !changes.isLoaded {
                 PaneMessage("")
             } else if changes.files.isEmpty {
-                PaneMessage("No changes. The working tree is clean.")
+                PaneMessage(emptyMessage)
             } else if changes.visibleFiles.isEmpty {
                 PaneMessage("No files match “\(changes.filter)”")
             } else {
@@ -42,17 +42,31 @@ struct ChangesColumn: View {
             if !changes.files.isEmpty {
                 reviewProgress
             }
-            commitArea
+            if !changes.isReadOnly {
+                commitArea
+            }
+        }
+    }
+
+    private var emptyMessage: String {
+        switch changes.source {
+        case .workingTree: "No changes. The working tree is clean."
+        case let .branch(name, base): "\(name) has no changes since it left \(base)."
         }
     }
 
     private var stageAllRow: some View {
         HStack(spacing: 8) {
-            Toggle(isOn: Binding(get: { changes.allStaged }, set: { _ in changes.toggleAllStaged() })) {
-                Text("\(changes.stagedPaths.count) of \(changes.files.count) staged")
+            if changes.isReadOnly {
+                Text("\(changes.files.count) \(changes.files.count == 1 ? "file" : "files") changed")
                     .foregroundStyle(Palette.secondaryText)
+            } else {
+                Toggle(isOn: Binding(get: { changes.allStaged }, set: { _ in changes.toggleAllStaged() })) {
+                    Text("\(changes.stagedPaths.count) of \(changes.files.count) staged")
+                        .foregroundStyle(Palette.secondaryText)
+                }
+                .toggleStyle(.checkbox)
             }
-            .toggleStyle(.checkbox)
             Spacer(minLength: 0)
             LineStats(additions: changes.totalAdditions, deletions: changes.totalDeletions)
         }
@@ -120,12 +134,14 @@ private struct ChangedFileRow: View {
         let isSelected = file.id == changes.selectedPath
         let isViewed = changes.isViewed(file)
         HStack(spacing: 8) {
-            Toggle("Stage \(file.diff.path)", isOn: Binding(
-                get: { changes.isStaged(file) },
-                set: { changes.setStaged(file, $0) }
-            ))
-            .toggleStyle(.checkbox)
-            .labelsHidden()
+            if !changes.isReadOnly {
+                Toggle("Stage \(file.diff.path)", isOn: Binding(
+                    get: { changes.isStaged(file) },
+                    set: { changes.setStaged(file, $0) }
+                ))
+                .toggleStyle(.checkbox)
+                .labelsHidden()
+            }
 
             Button {
                 changes.select(file)

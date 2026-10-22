@@ -90,7 +90,8 @@ struct RepositoryHeader: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(model.repositoryName)
                     .font(.system(size: 13, weight: .bold))
-                Text("\(worktree.name) — \(Text(worktree.branch).font(.mono(11)))")
+                Text(model.previewedBranch.map { "Previewing \(Text($0.name).font(.mono(11)))" }
+                    ?? "\(worktree.name) — \(Text(worktree.branch).font(.mono(11)))")
                     .font(.system(size: 11))
                     .foregroundStyle(Palette.secondaryText)
                     .lineLimit(1)

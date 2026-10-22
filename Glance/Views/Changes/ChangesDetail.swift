@@ -16,13 +16,13 @@ struct ChangesDetail: View {
                 toolbar(for: file)
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0, pinnedViews: .sectionHeaders) {
-                        DiffHunksView(hunks: file.diff.hunks ?? [], layout: model.diffLayout, showsHunkActions: true)
+                        DiffHunksView(hunks: file.diff.hunks ?? [], layout: model.diffLayout, showsHunkActions: !changes.isReadOnly)
                     }
                 }
                 .id(file.id)
             } else {
                 TopBar {}
-                PaneMessage("Nothing to review in \(model.currentWorktree.name).")
+                PaneMessage("Nothing to review in \(model.previewedBranch?.name ?? model.currentWorktree.name).")
             }
             statusBar
         }
@@ -83,7 +83,10 @@ struct ChangesDetail: View {
     private var statusBar: some View {
         let worktree = model.currentWorktree
         return StatusBar {
-            if worktree.isAgentActive {
+            if case let .branch(name, base) = changes.source {
+                Text("Comparing \(Text(name).font(.mono(11))) with \(Text(base).font(.mono(11)))")
+                Text("Double-click the branch to check it out")
+            } else if worktree.isAgentActive {
                 HStack(spacing: 6) {
                     AgentDot()
                     Text("Watching for changes")
@@ -92,8 +95,10 @@ struct ChangesDetail: View {
             } else {
                 Text("Up to date")
             }
-            Text(worktree.path).font(.mono(11))
-            Text("↑\(worktree.aheadCount) ↓\(worktree.behindCount)")
+            if !changes.isReadOnly {
+                Text(worktree.path).font(.mono(11))
+                Text("↑\(worktree.aheadCount) ↓\(worktree.behindCount)")
+            }
             Spacer(minLength: 0)
             ShortcutHint(keys: ["J", "K"], label: "files")
             ShortcutHint(keys: ["V"], label: "viewed")

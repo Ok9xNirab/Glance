@@ -137,7 +137,7 @@ private struct WorktreeRow: View {
     @Environment(\.glanceAccent) private var accent
 
     var body: some View {
-        let isCurrent = worktree.id == model.currentWorktreeID
+        let isCurrent = worktree.id == model.currentWorktreeID && model.previewedBranch == nil
         Button {
             model.switchTo(worktree)
         } label: {
@@ -172,9 +172,15 @@ private struct WorktreeRow: View {
 
 private struct BranchRow: View {
     let branch: Branch
+    @Environment(AppModel.self) private var model
 
     var body: some View {
-        Button {} label: {
+        let isPreviewed = model.previewedBranch?.name == branch.name
+        BranchRowLabel(isSelected: isPreviewed) {
+            model.preview(branch)
+        } doubleClick: {
+            model.checkOut(branch)
+        } label: {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.triangle.branch")
                     .font(.system(size: 12))
@@ -188,6 +194,32 @@ private struct BranchRow: View {
             .padding(.vertical, 4)
             .frame(minHeight: 28)
         }
-        .buttonStyle(RowButtonStyle())
+    }
+}
+
+/// A branch row: a click previews the branch's changes and a double-click checks it out, like opening a file in Finder.
+private struct BranchRowLabel<Label: View>: View {
+    let isSelected: Bool
+    let click: () -> Void
+    let doubleClick: () -> Void
+    @ViewBuilder let label: Label
+    @State private var isHovered = false
+
+    var body: some View {
+        label
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? Palette.selection : isHovered ? Palette.hover : .clear)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 6))
+            .onTapGesture(count: 2, perform: doubleClick)
+            // Simultaneous, so the preview doesn't wait to rule out a double-click.
+            .simultaneousGesture(TapGesture().onEnded(click))
+            .onHover { isHovered = $0 }
+            .help("Click to preview changes, double-click to check out")
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+            .accessibilityAction { click() }
+            .accessibilityAction(named: "Check Out") { doubleClick() }
     }
 }

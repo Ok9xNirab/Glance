@@ -22,23 +22,26 @@ nonisolated struct WorkingTreeChange: Sendable {
     let hunks: [Hunk]?
 }
 
-/// Reads a worktree's uncommitted changes, staged and unstaged, compared with `HEAD`.
+/// Reads a worktree's uncommitted changes, staged and unstaged, compared with `HEAD`, or the changes a branch
+/// made since it left another.
 nonisolated enum WorkingTreeReader {
     /// Untracked files larger than this are listed without their contents.
     private static let untrackedSizeLimit = 1_000_000
     /// The tree of a repository with no commits, to diff against before the first commit.
     private static let emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
+    /// `--no-optional-locks` keeps status from rewriting the index, which would wake the file watcher again.
+    private static let git = ["--no-optional-locks", "-c", "core.quotePath=false"]
+    private static let diffOptions = ["--no-color", "--no-ext-diff", "--no-renames", "--unified=3"]
+
     static func read(_ worktree: URL) async throws -> [WorkingTreeChange] {
-        // `--no-optional-locks` keeps status from rewriting the index, which would wake the file watcher again.
-        let git = ["--no-optional-locks", "-c", "core.quotePath=false"]
         let status = try await Git.run(git + ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames"], in: worktree)
         let entries = parseStatus(status)
         guard !entries.isEmpty else { return [] }
 
         let base = (try? await Git.run(["rev-parse", "--verify", "--quiet", "HEAD"], in: worktree)) == nil ? emptyTree : "HEAD"
-        let diff = try await Git.run(git + ["diff", base, "--no-color", "--no-ext-diff", "--no-renames", "--unified=3"], in: worktree)
-        let hunksByPath = parseDiff(diff)
+        let diff = try await Git.run(git + ["diff", base] + diffOptions, in: worktree)
+        let hunksByPath = parseDiff(diff).mapValues(\.hunks)
 
         return entries.map { entry in
             if entry.isUntracked {
@@ -48,6 +51,15 @@ nonisolated enum WorkingTreeReader {
             return WorkingTreeChange(path: entry.path, status: status, isStaged: entry.isStaged, hunks: hunksByPath[entry.path] ?? [])
         }
         .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    }
+
+    /// What `branch` changed since it split from `base`, the way a pull request into `base` would show it.
+    static func read(branch: String, base: String, in repository: URL) async throws -> [WorkingTreeChange] {
+        // `--` after the range keeps a branch named like a file from being read as a path.
+        let diff = try await Git.run(git + ["diff", "\(base)...\(branch)"] + diffOptions + ["--"], in: repository)
+        return parseDiff(diff)
+            .map { WorkingTreeChange(path: $0.key, status: $0.value.status, isStaged: false, hunks: $0.value.hunks) }
+            .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
     }
 
     // MARK: Status
@@ -71,10 +83,11 @@ nonisolated enum WorkingTreeReader {
 
     // MARK: Diff
 
-    /// Hunks for each path in a unified diff, or `nil` for a binary file.
-    private static func parseDiff(_ output: String) -> [String: [WorkingTreeChange.Hunk]?] {
-        var result: [String: [WorkingTreeChange.Hunk]?] = [:]
+    /// The status and hunks of each path in a unified diff, with `nil` hunks for a binary file.
+    private static func parseDiff(_ output: String) -> [String: (status: FileStatus, hunks: [WorkingTreeChange.Hunk]?)] {
+        var result: [String: (status: FileStatus, hunks: [WorkingTreeChange.Hunk]?)] = [:]
         var path: String?
+        var status = FileStatus.modified
         var hunks: [WorkingTreeChange.Hunk] = []
         var isBinary = false
         var current: (oldStart: Int, newStart: Int, context: String, lines: [String])?
@@ -85,8 +98,9 @@ nonisolated enum WorkingTreeReader {
         }
         func finishFile() {
             finishHunk()
-            if let path { result[path] = isBinary ? .some(nil) : hunks }
+            if let path { result[path] = (status, isBinary ? nil : hunks) }
             path = nil
+            status = .modified
             hunks = []
             isBinary = false
         }
@@ -99,6 +113,10 @@ nonisolated enum WorkingTreeReader {
             } else if line.hasPrefix("@@ ") {
                 finishHunk()
                 current = parseHunkHeader(line)
+            } else if line.hasPrefix("new file mode") {
+                status = .added
+            } else if line.hasPrefix("deleted file mode") {
+                status = .deleted
             } else if line.hasPrefix("--- a/") {
                 path = filePath(line.dropFirst(6))
             } else if line.hasPrefix("+++ b/") {

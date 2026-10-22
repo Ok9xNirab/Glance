@@ -19,6 +19,8 @@ enum DiffLayout: Hashable {
 final class AppModel {
     private(set) var repositories: [Repository] = []
     var currentWorktreeID: Worktree.ID?
+    /// A branch without a worktree whose changes are shown in place of the current worktree's, without checking it out.
+    private(set) var previewedBranch: Branch?
     var mode = ViewMode.changes
     var diffLayout = DiffLayout.unified
     var isSidebarVisible = true
@@ -41,6 +43,7 @@ final class AppModel {
     private(set) var recentlyCopied: CopyTarget?
     private var copyResetTask: Task<Void, Never>?
     @ObservationIgnored private var changesByWorktree: [Worktree.ID: ChangesModel] = [:]
+    @ObservationIgnored private var changesByBranch: [String: ChangesModel] = [:]
     /// The worktree last open in each repository, so switching back returns to it.
     @ObservationIgnored private var lastWorktreeIDs: [Repository.ID: Worktree.ID] = [:]
 
@@ -68,7 +71,27 @@ final class AppModel {
         worktrees.first { $0.id == currentWorktreeID } ?? worktrees.first ?? Worktree(name: "", branch: "", url: URL(filePath: "/"))
     }
 
-    var changes: ChangesModel { changes(for: currentWorktree) }
+    var changes: ChangesModel {
+        if let previewedBranch, let repository = currentRepository { return changes(for: previewedBranch, in: repository) }
+        return changes(for: currentWorktree)
+    }
+
+    /// What `branch` changed since it left the branch checked out in the repository's main folder.
+    private func changes(for branch: Branch, in repository: Repository) -> ChangesModel {
+        let base = repository.mainWorktree.branch
+        let key = "\(repository.id.path)\n\(base)...\(branch.name)"
+        if let changes = changesByBranch[key] { return changes }
+        let changes = ChangesModel(branch: branch.name, base: base, repository: repository.url)
+        changesByBranch[key] = changes
+        return changes
+    }
+
+    /// Shows `branch`'s changes without checking it out.
+    func preview(_ branch: Branch) {
+        previewedBranch = branch
+        // Read again in case the branch moved since it was last shown.
+        changes.refresh()
+    }
 
     func changes(for worktree: Worktree) -> ChangesModel {
         if let changes = changesByWorktree[worktree.id] { return changes }
@@ -80,6 +103,7 @@ final class AppModel {
 
     func switchTo(_ worktree: Worktree) {
         currentWorktreeID = worktree.id
+        previewedBranch = nil
         guard let repository = currentRepository else { return }
         lastWorktreeIDs[repository.id] = worktree.id
         recentRepositoryPaths.removeAll { $0 == repository.url.path }
@@ -146,6 +170,9 @@ final class AppModel {
         repositories = repositories.map { (try? GitRepositoryReader.read($0.url)) ?? $0 }
         let ids = Set(worktrees.map(\.id))
         changesByWorktree = changesByWorktree.filter { ids.contains($0.key) }
+        if let branch = previewedBranch, !(currentRepository?.branches.contains { $0.name == branch.name } ?? false) {
+            previewedBranch = nil
+        }
         if !worktrees.contains(where: { $0.id == currentWorktreeID }) {
             currentWorktreeID = worktrees.first?.id
         }
@@ -179,6 +206,7 @@ final class AppModel {
     }
 
     func checkOut(_ branch: Branch) {
+        previewedBranch = nil
         runGit(["switch", branch.name], in: currentWorktree.url, failure: "Couldn’t Check Out \(branch.name)")
     }
 
