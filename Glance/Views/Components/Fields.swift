@@ -44,54 +44,6 @@ struct SearchField: View {
     }
 }
 
-struct BoxedTextField: View {
-    let placeholder: String
-    @Binding var text: String
-
-    init(_ placeholder: String, text: Binding<String>) {
-        self.placeholder = placeholder
-        _text = text
-    }
-
-    var body: some View {
-        TextField(placeholder, text: $text, prompt: Text(placeholder).foregroundStyle(Palette.secondaryText))
-            .textFieldStyle(.plain)
-            .padding(.horizontal, 8)
-            .frame(height: 26)
-            .fieldBox()
-    }
-}
-
-struct BoxedTextEditor: View {
-    let placeholder: String
-    @Binding var text: String
-
-    init(_ placeholder: String, text: Binding<String>) {
-        self.placeholder = placeholder
-        _text = text
-    }
-
-    var body: some View {
-        TextEditor(text: $text)
-            .font(.system(size: 13))
-            .scrollContentBackground(.hidden)
-            .padding(.horizontal, 3)
-            .padding(.vertical, 5)
-            .frame(height: 60)
-            .overlay(alignment: .topLeading) {
-                if text.isEmpty {
-                    Text(placeholder)
-                        .foregroundStyle(Palette.secondaryText)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .allowsHitTesting(false)
-                }
-            }
-            .fieldBox()
-            .accessibilityLabel(placeholder)
-    }
-}
-
 private extension View {
     func fieldBox() -> some View {
         background(RoundedRectangle(cornerRadius: 6).fill(Palette.field))

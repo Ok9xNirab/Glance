@@ -7,6 +7,7 @@ import SwiftUI
 
 struct ChangesColumn: View {
     @Bindable var changes: ChangesModel
+    @Environment(AppModel.self) private var model
     @Environment(\.glanceAccent) private var accent
 
     var body: some View {
@@ -42,8 +43,8 @@ struct ChangesColumn: View {
             if !changes.files.isEmpty {
                 reviewProgress
             }
-            if !changes.isReadOnly {
-                commitArea
+            if !changes.isReadOnly, !changes.files.isEmpty {
+                commitPromptArea
             }
         }
     }
@@ -97,28 +98,31 @@ struct ChangesColumn: View {
         .padding(.bottom, 4)
     }
 
-    private var commitArea: some View {
-        let stagedCount = changes.stagedPaths.count
-        return VStack(spacing: 8) {
-            BoxedTextField("Summary", text: $changes.summary)
-            BoxedTextEditor("Description", text: $changes.details)
-            Button(action: changes.commit) {
-                Text("Commit \(stagedCount) \(stagedCount == 1 ? "File" : "Files")")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 28)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(accent)
-                            .shadow(color: .black.opacity(0.2), radius: 0.5, y: 0.5)
-                    )
-                    .contentShape(Rectangle())
+    private var commitPromptArea: some View {
+        let count = changes.reviewedFiles.count
+        let copied = model.recentlyCopied == .commitPrompt
+        return Button {
+            model.copy(changes.commitPrompt, as: .commitPrompt)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                Text(copied ? "Copied" : count == 0 ? "Review Files to Commit" : "Copy Commit Prompt for \(count) \(count == 1 ? "File" : "Files")")
             }
-            .buttonStyle(.plain)
-            .disabled(!changes.canCommit)
-            .opacity(changes.canCommit ? 1 : 0.45)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(accent)
+                    .shadow(color: .black.opacity(0.2), radius: 0.5, y: 0.5)
+            )
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .disabled(count == 0)
+        .opacity(count == 0 ? 0.45 : 1)
+        .help("Copy a prompt asking your agent to commit the files you've marked as viewed (V)")
         .padding(EdgeInsets(top: 10, leading: 12, bottom: 12, trailing: 12))
         .overlay(alignment: .top) { Hairline() }
     }

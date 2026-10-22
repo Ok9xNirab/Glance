@@ -221,7 +221,7 @@ final class AppModel {
     // MARK: Copying
 
     enum CopyTarget {
-        case agentContext, path, sha
+        case agentContext, commitPrompt, path, sha
     }
 
     func copy(_ text: String, as target: CopyTarget) {

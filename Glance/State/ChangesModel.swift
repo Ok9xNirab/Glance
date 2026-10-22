@@ -21,14 +21,11 @@ final class ChangesModel {
     private(set) var files: [ChangedFile] = []
     /// `false` until git has been read once, so a clean worktree isn't announced before it's known.
     private(set) var isLoaded = false
-    private(set) var isCommitting = false
     var selectedPath: String?
     var stagedPaths: Set<String> = []
     var viewedPaths: Set<String> = []
     var filter = ""
-    var summary = ""
-    var details = ""
-    /// Shows why git refused to stage or commit.
+    /// Shows why git refused to stage or unstage.
     @ObservationIgnored var onError: (String, Error) -> Void = { _, _ in }
 
     @ObservationIgnored private var watcher: FileWatcher?
@@ -186,27 +183,18 @@ final class ChangesModel {
 
     // MARK: Committing
 
-    var canCommit: Bool {
-        !isReadOnly && !stagedPaths.isEmpty && !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isCommitting
-    }
+    /// Files marked as viewed, in list order.
+    var reviewedFiles: [ChangedFile] { files.filter(isViewed) }
 
-    /// Commits what's staged with the summary and description as its message, running the user's hooks.
-    func commit() {
-        guard canCommit else { return }
-        let details = details.trimmingCharacters(in: .whitespacesAndNewlines)
-        var arguments = ["commit", "--quiet", "-m", summary.trimmingCharacters(in: .whitespacesAndNewlines)]
-        if !details.isEmpty { arguments += ["-m", details] }
-        isCommitting = true
-        Task {
-            do {
-                try await Git.run(arguments, in: url)
-                summary = ""
-                self.details = ""
-            } catch {
-                onError("Couldn’t Commit", error)
-            }
-            isCommitting = false
-            refresh()
-        }
+    /// Asks an agent to commit just the reviewed files. Glance leaves committing to the agent.
+    var commitPrompt: String {
+        let paths = reviewedFiles.map { "- `\($0.diff.path)`" }.joined(separator: "\n")
+        return """
+            Commit only these files in \(url.path), which I've reviewed:
+
+            \(paths)
+
+            Leave every other change uncommitted, and write a commit message that describes these changes.
+            """
     }
 }
