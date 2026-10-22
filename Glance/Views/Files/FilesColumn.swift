@@ -63,7 +63,7 @@ private struct FileTreeRow: View {
         let node = row.node
         let isSelected = !node.isFolder && node.path == files.activePath
         let isExpanded = files.isExpanded(node)
-        let iconColor: Color = isSelected ? .white.opacity(0.85) : node.isFolder ? accent : Palette.secondaryText
+        let iconColor: Color = isSelected ? .white.opacity(0.85) : accent
 
         Button {
             if node.isFolder {
@@ -82,10 +82,14 @@ private struct FileTreeRow: View {
                 .foregroundStyle(isSelected ? .white.opacity(0.85) : Palette.secondaryText)
                 .frame(width: 12)
 
-                Image(systemName: node.isFolder ? "folder" : "doc")
-                    .font(.system(size: 12))
-                    .foregroundStyle(iconColor)
-                    .frame(width: 16)
+                if node.isFolder {
+                    Image(systemName: "folder")
+                        .font(.system(size: 12))
+                        .foregroundStyle(iconColor)
+                        .frame(width: 16)
+                } else {
+                    FileIcon(name: node.name, inverted: isSelected)
+                }
 
                 HStack(spacing: 6) {
                     Text(node.name)

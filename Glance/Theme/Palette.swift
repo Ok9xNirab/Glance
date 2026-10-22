@@ -62,6 +62,16 @@ enum Palette {
     static let minimapLine = Color(light: .rgba(0, 0, 0, 0.28), dark: .rgba(255, 255, 255, 0.3))
     static let minimapViewport = Color(light: .rgba(0, 0, 0, 0.06), dark: .rgba(255, 255, 255, 0.07))
 
+    // File type icons
+    static let fileBlue = Color(light: .rgb(0x2F74C0), dark: .rgb(0x519ABA))
+    static let fileCyan = Color(light: .rgb(0x0E8FAD), dark: .rgb(0x5BC8E0))
+    static let fileYellow = Color(light: .rgb(0xB08A00), dark: .rgb(0xE5C94F))
+    static let fileOrange = Color(light: .rgb(0xE0571F), dark: .rgb(0xF0864A))
+    static let fileRed = Color(light: .rgb(0xC9343A), dark: .rgb(0xE8595F))
+    static let filePurple = Color(light: .rgb(0x7A55B3), dark: .rgb(0xA889D8))
+    static let fileGreen = Color(light: .rgb(0x3E8E3A), dark: .rgb(0x8DC149))
+    static let fileGray = Color(light: .rgb(0x68686D), dark: .rgb(0xA3A3A8))
+
     // Syntax
     static let syntaxKeyword = Color(light: .rgb(0x9B2393), dark: .rgb(0xFF7AB2))
     static let syntaxString = Color(light: .rgb(0xC41A16), dark: .rgb(0xFF8170))

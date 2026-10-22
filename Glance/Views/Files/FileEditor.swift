@@ -135,6 +135,7 @@ private struct EditorTab: View {
                     if let status = files.status(of: tab.path) {
                         StatusBadge(status: status, size: 13)
                     }
+                    FileIcon(name: tab.path.pathName, size: 11)
                     Text(tab.path.pathName)
                         .italic(tab.isPreview)
                         .lineLimit(1)

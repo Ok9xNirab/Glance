@@ -130,6 +130,7 @@ private struct ChangedFileRow: View {
             } label: {
                 HStack(spacing: 7) {
                     StatusBadge(status: file.diff.status, inverted: isSelected)
+                    FileIcon(name: file.diff.name, inverted: isSelected)
                     Text("\(Text(file.diff.directory).foregroundStyle(isSelected ? Color.white.opacity(0.82) : Palette.secondaryText))\(Text(file.diff.name).foregroundStyle(isSelected ? .white : isViewed ? Palette.secondaryText : Palette.text))")
                         .lineLimit(1)
                         .truncationMode(.head)
