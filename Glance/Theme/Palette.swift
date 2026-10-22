@@ -72,6 +72,9 @@ enum Palette {
     static let fileGreen = Color(light: .rgb(0x3E8E3A), dark: .rgb(0x8DC149))
     static let fileGray = Color(light: .rgb(0x68686D), dark: .rgb(0xA3A3A8))
 
+    // Repository owner avatars
+    static let owners: [Color] = [0xB4532A, 0x2563EB, 0x0F766E, 0x7C3AED, 0xBE185D, 0x4D7C0F].map { Color(light: .rgb($0), dark: .rgb($0)) }
+
     // Syntax
     static let syntaxKeyword = Color(light: .rgb(0x9B2393), dark: .rgb(0xFF7AB2))
     static let syntaxString = Color(light: .rgb(0xC41A16), dark: .rgb(0xFF8170))

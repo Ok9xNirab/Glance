@@ -87,6 +87,17 @@ struct WorktreeSwitcher: View {
                     focusedIndex = max(focusedIndex - 1, 0)
                     return .handled
                 }
+                .onKeyPress(.return, phases: .down) { press in
+                    guard !query.isEmpty else { return .ignored }
+                    if press.modifiers == .option {
+                        activate(.newWorktree)
+                    } else if press.modifiers == .shift {
+                        activate(.newBranch)
+                    } else {
+                        return .ignored
+                    }
+                    return .handled
+                }
                 .onKeyPress(.escape) {
                     dismiss()
                     return .handled
@@ -147,9 +158,9 @@ struct WorktreeSwitcher: View {
         case let .branch(branch):
             branchRow(branch, isFocused: isFocused)
         case .newWorktree:
-            actionRow("New worktree from “\(query)”…", systemImage: "plus", shortcut: "⌥↵", isFocused: isFocused, entry: entry)
+            actionRow("New worktree from “\(query)”", systemImage: "plus", shortcut: "⌥↵", isFocused: isFocused, entry: entry)
         case .newBranch:
-            actionRow("New branch “\(query)” in this worktree…", systemImage: "arrow.triangle.branch", shortcut: "⇧↵", isFocused: isFocused, entry: entry)
+            actionRow("New branch “\(query)” in this worktree", systemImage: "arrow.triangle.branch", shortcut: "⇧↵", isFocused: isFocused, entry: entry)
         }
     }
 
@@ -211,14 +222,22 @@ struct WorktreeSwitcher: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(highlighted(branch.name))
                     .font(.mono(12.5))
-                Text("Updated \(branch.lastUpdated) · \(branch.remote ?? "local only")")
+                Text([branch.lastUpdated.map { "Updated \($0.formatted(.relative(presentation: .named)))" }, branch.remote ?? "local only"]
+                    .compactMap(\.self)
+                    .joined(separator: " · "))
                     .font(.system(size: 11))
                     .foregroundStyle(Palette.secondaryText)
             }
             .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: .leading)
-            Button("Check Out", action: dismiss)
-            Button("New Worktree", action: dismiss)
+            Button("Check Out") {
+                model.checkOut(branch)
+                dismiss()
+            }
+            Button("New Worktree") {
+                model.createWorktree(branch: branch.name)
+                dismiss()
+            }
         }
         .buttonStyle(BezelButtonStyle(height: 22))
         .padding(.horizontal, 10)
@@ -251,10 +270,13 @@ struct WorktreeSwitcher: View {
 
     // MARK: Matching
 
+    /// The current repository's worktrees; other repositories are reached through the ⌘T picker.
+    private var worktrees: [Worktree] { model.currentRepository?.worktrees ?? [] }
+
     private var worktreeEntries: [Entry] {
-        guard !query.isEmpty else { return model.worktrees.map { .worktree($0, editedFile: nil) } }
-        let direct = model.worktrees.filter { matches($0.name) || matches($0.branch) }
-        let byFile: [Entry] = model.worktrees.compactMap { worktree in
+        guard !query.isEmpty else { return worktrees.map { .worktree($0, editedFile: nil) } }
+        let direct = worktrees.filter { matches($0.name) || matches($0.branch) }
+        let byFile: [Entry] = worktrees.compactMap { worktree in
             guard !direct.contains(where: { $0.id == worktree.id }),
                   let file = worktree.changes.first(where: { matches($0.diff.name) })
             else { return nil }
@@ -264,7 +286,8 @@ struct WorktreeSwitcher: View {
     }
 
     private var branchEntries: [Entry] {
-        model.branches.filter { query.isEmpty || matches($0.name) }.map(Entry.branch)
+        let checkedOut = Set(worktrees.map(\.branch))
+        return model.branches.filter { !checkedOut.contains($0.name) && (query.isEmpty || matches($0.name)) }.map(Entry.branch)
     }
 
     private var actionEntries: [Entry] {
@@ -287,8 +310,11 @@ struct WorktreeSwitcher: View {
     // MARK: Actions
 
     private func activate(_ entry: Entry) {
-        if case let .worktree(worktree, _) = entry {
-            model.switchTo(worktree)
+        switch entry {
+        case let .worktree(worktree, _): model.switchTo(worktree)
+        case let .branch(branch): model.checkOut(branch)
+        case .newWorktree: model.createWorktree(branch: query)
+        case .newBranch: model.createBranch(query)
         }
         dismiss()
     }

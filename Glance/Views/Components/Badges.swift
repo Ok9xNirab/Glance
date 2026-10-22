@@ -160,3 +160,78 @@ struct Avatar: View {
             .accessibilityHidden(true)
     }
 }
+
+/// The avatar of a repository's owner from its Git host. Until it loads, and for local-only repositories, it's a
+/// colored rounded square with the owner's initial (or the repository's).
+struct OwnerAvatar: View {
+    let repository: Repository
+    var size: CGFloat = 18
+    var cornerRadius: CGFloat = 5
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        content
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
+            .task(id: repository.owner) {
+                if let host = repository.host, let owner = repository.owner {
+                    await model.avatars.load(host: host, owner: owner)
+                }
+            }
+    }
+
+    @ViewBuilder private var content: some View {
+        if let host = repository.host, let owner = repository.owner, let avatar = model.avatars.avatar(host: host, owner: owner) {
+            let image = Image(nsImage: avatar.image).resizable().interpolation(.high)
+            if avatar.isOrganization {
+                image.clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            } else {
+                image.clipShape(Circle())
+            }
+        } else {
+            let name = repository.owner ?? repository.name
+            Text(name.prefix(1).uppercased())
+                .font(.system(size: size * 0.5, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: size, height: size)
+                .background(RoundedRectangle(cornerRadius: cornerRadius).fill(color(for: repository.owner)))
+        }
+    }
+
+    /// The same owner always gets the same color. `String.hashValue` changes between launches, so sum the scalars.
+    private func color(for owner: String?) -> Color {
+        guard let owner else { return Palette.fileGray }
+        let sum = owner.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        return Palette.owners[sum % Palette.owners.count]
+    }
+}
+
+/// The fork glyph from the design: two tines joining into one stem. SF Symbols has no fork.
+struct ForkIcon: View {
+    var size: CGFloat = 14
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            // Drawn on the design's 24×24 grid.
+            let scale = canvasSize.width / 24
+            var path = Path()
+            for center in [CGPoint(x: 6, y: 5), CGPoint(x: 18, y: 5), CGPoint(x: 12, y: 19)] {
+                path.addEllipse(in: CGRect(x: center.x - 2, y: center.y - 2, width: 4, height: 4))
+            }
+            path.move(to: CGPoint(x: 6, y: 7))
+            path.addLine(to: CGPoint(x: 6, y: 9))
+            path.addQuadCurve(to: CGPoint(x: 9, y: 12), control: CGPoint(x: 6, y: 12))
+            path.addLine(to: CGPoint(x: 15, y: 12))
+            path.addQuadCurve(to: CGPoint(x: 18, y: 9), control: CGPoint(x: 18, y: 12))
+            path.addLine(to: CGPoint(x: 18, y: 7))
+            path.move(to: CGPoint(x: 12, y: 12))
+            path.addLine(to: CGPoint(x: 12, y: 17))
+            context.stroke(
+                path.applying(CGAffineTransform(scaleX: scale, y: scale)),
+                with: .foreground,
+                style: StrokeStyle(lineWidth: 1.8 * scale, lineCap: .round, lineJoin: .round)
+            )
+        }
+        .frame(width: size, height: size)
+    }
+}

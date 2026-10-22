@@ -12,6 +12,11 @@ struct GlanceCommands: Commands {
         // ⌘P is "Go to File…" here, not Print.
         CommandGroup(replacing: .printItem) {}
 
+        CommandGroup(replacing: .newItem) {
+            Button("Add Repository…", action: model.addRepository)
+                .keyboardShortcut("o")
+        }
+
         CommandGroup(before: .toolbar) {
             Button("Toggle Sidebar", action: model.toggleSidebar)
                 .keyboardShortcut("s", modifiers: [.control, .command])
@@ -26,8 +31,16 @@ struct GlanceCommands: Commands {
         }
 
         CommandMenu("Navigate") {
-            Button("Switch Worktree or Branch…") { model.isSwitcherPresented = true }
-                .keyboardShortcut("k")
+            Button("Switch Worktree or Branch…") {
+                model.isRepositoryPickerPresented = false
+                model.isSwitcherPresented = true
+            }
+            .keyboardShortcut("k")
+            Button("Switch Repository…") {
+                model.isSwitcherPresented = false
+                model.isRepositoryPickerPresented = true
+            }
+            .keyboardShortcut("t")
             Button("Go to File…", action: model.goToFile)
                 .keyboardShortcut("p")
             Divider()
