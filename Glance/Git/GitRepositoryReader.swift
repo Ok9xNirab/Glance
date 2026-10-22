@@ -22,9 +22,6 @@ enum GitRepositoryReader {
         }
     }
 
-    /// How many branches without a worktree the sidebar lists.
-    private static let recentBranchLimit = 3
-
     static func read(_ url: URL) throws -> Repository {
         let name = url.lastPathComponent
         let gitDir = url.appending(path: ".git")
@@ -35,18 +32,23 @@ enum GitRepositoryReader {
         guard isDirectory.boolValue else { throw ReadError.linkedWorktree(name) }
 
         let worktrees = [Worktree(name: name, branch: head(in: gitDir), url: url.standardizedFileURL)] + linkedWorktrees(in: gitDir)
-        let checkedOut = Set(worktrees.map(\.branch))
         let config = config(in: gitDir)
         let remotes = config.reduce(into: [String: String]()) { remotes, section in
             if let branch = quotedName(section.key, kind: "branch"), let remote = section.value["remote"] { remotes[branch] = remote }
         }
 
-        var branches = branchNames(in: gitDir)
-            .map { Branch(name: $0, lastUpdated: lastUpdated(branch: $0, in: gitDir), remote: remotes[$0]) }
+        let remoteNames = config.keys.compactMap { quotedName($0, kind: "remote") }
+        let switches = branchSwitches(in: gitDir)
+        let branches = branchNames(in: gitDir)
+            .map { name in
+                Branch(
+                    name: name,
+                    lastUpdated: lastUpdated(branch: name, in: gitDir),
+                    remote: remotes[name],
+                    base: base(of: name, in: gitDir, remotes: remoteNames, switches: switches)
+                )
+            }
             .sorted { ($0.lastUpdated ?? .distantPast, $1.name) > ($1.lastUpdated ?? .distantPast, $0.name) }
-        for index in branches.indices.filter({ !checkedOut.contains(branches[$0].name) }).prefix(recentBranchLimit) {
-            branches[index].isRecent = true
-        }
 
         let remote = remoteOwner(config: config)
         return Repository(url: url, host: remote?.host, owner: remote?.owner, remoteName: remote?.name, worktrees: worktrees, branches: branches)
@@ -106,6 +108,49 @@ enum GitRepositoryReader {
               let seconds = identity.split(separator: " ").dropLast().last.flatMap({ TimeInterval($0) })
         else { return nil }
         return Date(timeIntervalSince1970: seconds)
+    }
+
+    /// The branch `branch` was created from. Its reflog starts "branch: Created from main" when it was made from a
+    /// named branch, but "Created from HEAD" when it was made with `git switch -c`, so then it's the branch some
+    /// worktree switched away from to reach it.
+    private static func base(of branch: String, in gitDir: URL, remotes: [String], switches: [String: String]) -> String? {
+        guard let line = text(at: gitDir.appending(path: "logs/refs/heads/\(branch)"))?.split(separator: "\n").first,
+              let message = line.split(separator: "\t", maxSplits: 1).last,
+              message.hasPrefix("branch: Created from ")
+        else { return nil }
+
+        var source = String(message.dropFirst("branch: Created from ".count))
+        guard source != "HEAD" else { return switches[branch] }
+        for prefix in ["refs/heads/", "refs/remotes/"] where source.hasPrefix(prefix) {
+            source = String(source.dropFirst(prefix.count))
+        }
+        // "origin/main" counts as "main"; a branch made from its own remote copy has no base of its own.
+        if let remote = remotes.first(where: { source.hasPrefix($0 + "/") }) {
+            source = String(source.dropFirst(remote.count + 1))
+        }
+        return source == branch ? nil : source
+    }
+
+    /// For each branch a worktree first switched to, the branch it switched from, read from every worktree's `HEAD`
+    /// reflog: "checkout: moving from main to rate-limit".
+    private static func branchSwitches(in gitDir: URL) -> [String: String] {
+        let linked = (try? FileManager.default.contentsOfDirectory(at: gitDir.appending(path: "worktrees"), includingPropertiesForKeys: nil)) ?? []
+        let logs = [gitDir] + linked
+        var switches: [String: (from: String, time: TimeInterval)] = [:]
+        for log in logs {
+            for line in text(at: log.appending(path: "logs/HEAD"))?.split(separator: "\n") ?? [] {
+                let parts = line.split(separator: "\t", maxSplits: 1)
+                guard parts.count == 2, parts[1].hasPrefix("checkout: moving from ") else { continue }
+                let names = parts[1].dropFirst("checkout: moving from ".count).components(separatedBy: " to ")
+                guard names.count == 2, names[0] != names[1] else { continue }
+                let time = parts[0].split(separator: " ").dropLast().last.flatMap { TimeInterval($0) } ?? 0
+                // The earliest switch is the one that created the branch.
+                if switches[names[1]].map({ time < $0.time }) ?? true {
+                    switches[names[1]] = (names[0], time)
+                }
+            }
+        }
+        return switches.mapValues(\.from)
     }
 
     // MARK: Config

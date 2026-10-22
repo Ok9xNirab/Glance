@@ -42,7 +42,7 @@ struct SidebarView: View {
                             }
                             .padding(.horizontal, 10)
 
-                            let recentBranches = repository.branches.filter(\.isRecent)
+                            let recentBranches = repository.sidebarBranches(for: model.currentWorktree)
                             if !recentBranches.isEmpty {
                                 SectionHeading(title: "Branches")
                                     .padding(.top, 4)

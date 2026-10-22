@@ -21,6 +21,24 @@ struct Repository: Identifiable {
     var name: String { url.lastPathComponent }
     /// The worktree that's checked out in the folder the user added.
     var mainWorktree: Worktree { worktrees[0] }
+
+    /// How many branches the sidebar lists under a worktree.
+    private static let sidebarBranchLimit = 5
+
+    /// The most recently updated branches that were created from `worktree`'s branch and aren't checked out. Branches
+    /// whose origin isn't known, or whose origin isn't checked out anywhere, are listed under the main worktree.
+    func sidebarBranches(for worktree: Worktree) -> [Branch] {
+        let checkedOut = Set(worktrees.map(\.branch))
+        let isMain = worktree.id == mainWorktree.id
+        return branches
+            .filter { branch in
+                guard !checkedOut.contains(branch.name) else { return false }
+                guard let base = branch.base, checkedOut.contains(base) else { return isMain }
+                return base == worktree.branch
+            }
+            .prefix(Self.sidebarBranchLimit)
+            .map { $0 }
+    }
 }
 
 struct ChangedFile: Identifiable {
@@ -52,8 +70,8 @@ struct Branch: Identifiable {
     let lastUpdated: Date?
     /// The remote tracking this branch, or `nil` for a local-only branch.
     var remote: String?
-    /// Recently used branches are listed in the sidebar.
-    var isRecent = false
+    /// The branch this one was created from, when its reflog says.
+    var base: String?
 
     var id: String { name }
 }
