@@ -15,9 +15,11 @@ enum DiffLayout: Hashable {
     case unified, split
 }
 
+/// One window's state: which worktree it shows and how. The repositories themselves are shared through
+/// `RepositoryLibrary`.
 @Observable
 final class AppModel {
-    private(set) var repositories: [Repository] = []
+    let library: RepositoryLibrary
     var currentWorktreeID: Worktree.ID?
     /// A branch without a worktree whose changes are shown in place of the current worktree's, without checking it out.
     private(set) var previewedBranch: Branch?
@@ -34,9 +36,6 @@ final class AppModel {
         let message: String
     }
 
-    let avatars = AvatarStore()
-    let remoteDetails = RemoteDetailsStore()
-
     /// Which copy action most recently put text on the pasteboard, shown as feedback for a moment.
     private(set) var recentlyCopied: CopyTarget?
     private var copyResetTask: Task<Void, Never>?
@@ -48,15 +47,23 @@ final class AppModel {
     /// The worktree last open in each repository, so switching back returns to it.
     @ObservationIgnored private var lastWorktreeIDs: [Repository.ID: Worktree.ID] = [:]
 
-    /// Repository paths, most recently opened first.
-    private(set) var recentRepositoryPaths = UserDefaults.standard.stringArray(forKey: recentRepositoriesKey) ?? []
-    private static let recentRepositoriesKey = "recentRepositoryPaths"
+    /// Opens the worktree at `worktreePath`, as when a window is restored, or else the most recent repository.
+    init(library: RepositoryLibrary, worktreePath: String? = nil) {
+        self.library = library
+        let worktrees = library.repositories.flatMap(\.worktrees)
+        currentWorktreeID = worktrees.first { $0.id == worktreePath }?.id
+            ?? (library.recentRepositories.first ?? library.repositories.first)?.mainWorktree.id
+    }
 
-    init() {
-        for url in RepositoryBookmarks.restore() {
-            if let repository = try? GitRepositoryReader.read(url) { repositories.append(repository) }
-        }
-        currentWorktreeID = (recentRepositories.first ?? repositories.first)?.mainWorktree.id
+    var repositories: [Repository] { library.repositories }
+    var avatars: AvatarStore { library.avatars }
+    var remoteDetails: RemoteDetailsStore { library.remoteDetails }
+
+    /// "repo › worktree › branch", for the window's title.
+    var windowTitle: String {
+        guard let repository = currentRepository else { return "Glance" }
+        let worktree = currentWorktree
+        return "\(repository.name) › \(worktree.name) › \(worktree.branch)"
     }
 
     var worktrees: [Worktree] { repositories.flatMap(\.worktrees) }
@@ -133,9 +140,7 @@ final class AppModel {
         previewedBranch = nil
         guard let repository = currentRepository else { return }
         lastWorktreeIDs[repository.id] = worktree.id
-        recentRepositoryPaths.removeAll { $0 == repository.url.path }
-        recentRepositoryPaths.insert(repository.url.path, at: 0)
-        UserDefaults.standard.set(recentRepositoryPaths, forKey: Self.recentRepositoriesKey)
+        library.noteOpened(repository)
     }
 
     /// Opens the worktree last used in `repository`, or its main worktree.
@@ -144,9 +149,7 @@ final class AppModel {
         switchTo(worktree)
     }
 
-    var recentRepositories: [Repository] {
-        recentRepositoryPaths.compactMap { path in repositories.first { $0.url.path == path } }
-    }
+    var recentRepositories: [Repository] { library.recentRepositories }
 
     // MARK: Repositories
 
@@ -162,34 +165,23 @@ final class AppModel {
 
         var errors: [String] = []
         for url in panel.urls {
-            if let existing = repositories.first(where: { $0.url.standardizedFileURL == url.standardizedFileURL }) {
-                open(existing)
-                continue
-            }
             do {
-                let repository = try GitRepositoryReader.read(url)
-                repositories.append(repository)
-                switchTo(repository.mainWorktree)
+                open(try library.add(url))
             } catch {
                 errors.append(error.localizedDescription)
             }
         }
-        RepositoryBookmarks.save(repositories.map(\.url))
         alert = errors.isEmpty ? nil : Alert(title: "Couldn’t Add Repository", message: errors.joined(separator: "\n\n"))
         if errors.isEmpty { isRepositoryPickerPresented = false }
     }
 
     func removeRepository(_ repository: Repository) {
-        repositories.removeAll { $0.id == repository.id }
+        library.remove(repository)
         for worktree in repository.worktrees {
             changesByWorktree[worktree.id] = nil
             historyByWorktree[worktree.id] = nil
             filesByWorktree[worktree.id] = nil
         }
-        RepositoryBookmarks.save(repositories.map(\.url))
-        repository.url.stopAccessingSecurityScopedResource()
-        recentRepositoryPaths.removeAll { $0 == repository.url.path }
-        UserDefaults.standard.set(recentRepositoryPaths, forKey: Self.recentRepositoriesKey)
         if !worktrees.contains(where: { $0.id == currentWorktreeID }) {
             currentWorktreeID = (recentRepositories.first ?? repositories.first)?.mainWorktree.id
         }
@@ -198,7 +190,7 @@ final class AppModel {
     /// Re-reads every repository, so worktrees and branches made outside Glance show up, and stops watching
     /// worktrees that are gone.
     func reloadRepositories() {
-        repositories = repositories.map { (try? GitRepositoryReader.read($0.url)) ?? $0 }
+        library.reload()
         let ids = Set(worktrees.map(\.id))
         changesByWorktree = changesByWorktree.filter { ids.contains($0.key) }
         historyByWorktree = historyByWorktree.filter { ids.contains($0.key) }

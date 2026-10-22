@@ -18,7 +18,7 @@ struct FilesScreen: View {
 }
 
 #Preview {
-    let model = AppModel()
+    let model = AppModel(library: RepositoryLibrary())
     FilesScreen(files: model.files)
         .environment(model)
         .frame(width: 1220, height: 900)

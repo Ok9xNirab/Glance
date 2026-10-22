@@ -8,6 +8,7 @@ import SwiftUI
 /// The ⌘T palette for switching repositories, grouped by the owner of each repository's remote.
 struct RepositoryPicker: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
     @Environment(\.glanceAccent) private var accent
     @State private var query = ""
     @State private var focusedIndex = 0
@@ -258,6 +259,8 @@ struct RepositoryPicker: View {
         .help(repository.url.path)
         .task(id: repository.url) { await model.remoteDetails.load(repository) }
         .contextMenu {
+            Button("Open in New Window") { openWindow(id: GlanceWindow.id, value: repository.mainWorktree.id) }
+            Divider()
             Button("Remove “\(repository.name)” from Glance") { model.removeRepository(repository) }
         }
     }

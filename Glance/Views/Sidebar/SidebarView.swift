@@ -135,6 +135,7 @@ private struct WorktreeRow: View {
     let worktree: Worktree
     @Environment(AppModel.self) private var model
     @Environment(\.glanceAccent) private var accent
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         let isCurrent = worktree.id == model.currentWorktreeID && model.previewedBranch == nil
@@ -167,6 +168,9 @@ private struct WorktreeRow: View {
         }
         .buttonStyle(RowButtonStyle(fill: isCurrent ? Palette.selection : nil))
         .accessibilityAddTraits(isCurrent ? .isSelected : [])
+        .contextMenu {
+            Button("Open in New Window") { openWindow(id: GlanceWindow.id, value: worktree.id) }
+        }
     }
 }
 

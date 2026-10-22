@@ -66,6 +66,6 @@ struct RootView: View {
 
 #Preview {
     RootView()
-        .environment(AppModel())
+        .environment(AppModel(library: RepositoryLibrary()))
         .frame(width: 1440, height: 900)
 }

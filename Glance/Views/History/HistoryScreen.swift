@@ -17,7 +17,7 @@ struct HistoryScreen: View {
 }
 
 #Preview {
-    let model = AppModel()
+    let model = AppModel(library: RepositoryLibrary())
     HistoryScreen(history: model.history)
         .environment(model)
         .frame(width: 1220, height: 900)

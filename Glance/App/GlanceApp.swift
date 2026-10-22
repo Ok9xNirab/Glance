@@ -9,18 +9,16 @@ import SwiftUI
 
 @main
 struct GlanceApp: App {
-    @State private var model = AppModel()
+    @State private var library = RepositoryLibrary()
 
     var body: some Scene {
-        WindowGroup {
-            RootView()
-                .environment(model)
-                .frame(minWidth: 1080, minHeight: 640)
+        WindowGroup(id: GlanceWindow.id, for: String.self) { $worktreePath in
+            GlanceWindow(library: library, worktreePath: $worktreePath)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1440, height: 900)
         .commands {
-            GlanceCommands(model: model)
+            GlanceCommands()
         }
     }
 }
