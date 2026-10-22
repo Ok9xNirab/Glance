@@ -12,7 +12,14 @@ struct ChangesDetail: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let file = changes.selectedFile {
+            if changes.isMultipleSelection {
+                TopBar {
+                    Text("\(changes.selectedPaths.count) files selected")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                MultipleSelection(changes: changes)
+            } else if let file = changes.selectedFile {
                 toolbar(for: file)
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0, pinnedViews: .sectionHeaders) {
@@ -28,6 +35,14 @@ struct ChangesDetail: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Palette.window)
+        .overlay(alignment: .bottom) {
+            if let discard = changes.lastDiscard {
+                // A new view for each discard, so its timer starts over.
+                UndoDiscardBanner(discard: discard, undo: changes.undoDiscard)
+                    .id(discard.id)
+                    .padding(.bottom, 40)
+            }
+        }
     }
 
     private func toolbar(for file: ChangedFile) -> some View {
@@ -63,8 +78,6 @@ struct ChangesDetail: View {
     private func hunkActions(for file: ChangedFile) -> HunkActions? {
         guard !changes.isReadOnly else { return nil }
         return HunkActions(
-            isStaged: { changes.isStaged(hunk: $0, in: file) },
-            toggleStaged: { changes.toggleStaged(hunk: $0, in: file) },
             discard: { changes.discard(hunk: $0, in: file) },
             discardsFile: file.diff.status == .added
         )
@@ -114,6 +127,71 @@ struct ChangesDetail: View {
             ShortcutHint(keys: ["J", "K"], label: "files")
             ShortcutHint(keys: ["V"], label: "viewed")
             ShortcutHint(keys: ["⌥S"], label: "split")
+        }
+    }
+}
+
+/// What's shown in place of a diff while several files are selected: their totals and what can be done to all of them.
+private struct MultipleSelection: View {
+    let changes: ChangesModel
+
+    var body: some View {
+        let files = changes.selectedFiles
+        let isViewed = changes.isSelectionViewed
+        VStack(spacing: 14) {
+            Image(systemName: "doc.on.doc")
+                .font(.system(size: 30, weight: .light))
+                .foregroundStyle(Palette.secondaryText)
+            VStack(spacing: 6) {
+                Text("\(files.count) files selected")
+                    .font(.system(size: 15, weight: .semibold))
+                LineStats(additions: files.reduce(0) { $0 + $1.diff.additions }, deletions: files.reduce(0) { $0 + $1.diff.deletions })
+            }
+            HStack(spacing: 8) {
+                Button(isViewed ? "Mark as Not Viewed" : "Mark as Viewed", action: changes.toggleViewedForSelection)
+                    .help("Mark the selected files as \(isViewed ? "not " : "")viewed (V)")
+                if !changes.isReadOnly {
+                    Button("Discard Changes") { changes.discard(files) }
+                }
+            }
+            .buttonStyle(BezelButtonStyle(height: 26))
+            Text("⌘-click to add or remove a file, ⇧-click to select a range.")
+                .font(.system(size: 11))
+                .foregroundStyle(Palette.secondaryText)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Shown for a few seconds after a discard. ⌘Z undoes it for as long as it's the last one.
+private struct UndoDiscardBanner: View {
+    let discard: ChangesModel.Discard
+    let undo: () -> Void
+    @State private var isVisible = true
+
+    var body: some View {
+        if isVisible {
+            HStack(spacing: 12) {
+                Text(discard.summary)
+                Button("Undo", action: undo)
+                    .buttonStyle(BezelButtonStyle(height: 22))
+                KeyCap("⌘Z")
+            }
+            .padding(.leading, 14)
+            .padding(.trailing, 8)
+            .frame(height: 36)
+            .background(
+                RoundedRectangle(cornerRadius: 9)
+                    .fill(Palette.switcherPanel)
+                    .shadow(color: .black.opacity(0.18), radius: 10, y: 3)
+            )
+            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Palette.separator))
+            .transition(.opacity)
+            .task(id: discard.id) {
+                try? await Task.sleep(for: .seconds(8))
+                withAnimation { isVisible = false }
+            }
         }
     }
 }

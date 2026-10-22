@@ -286,6 +286,10 @@ final class AppModel {
             copy(commit.sha, as: .sha)
             return true
         }
+        if modifiers == .command, key == "z", mode == .changes, changes.lastDiscard != nil {
+            changes.undoDiscard()
+            return true
+        }
         guard modifiers.isEmpty else { return false }
 
         switch mode {

@@ -40,8 +40,7 @@ extension SampleData {
                     "+}",
                 ]),
             ]),
-            agentEditedAgo: "4s",
-            isStaged: true
+            agentEditedAgo: "4s"
         ),
         ChangedFile(
             diff: FileDiff("src/server.ts", .modified, hunks: [
@@ -62,7 +61,6 @@ extension SampleData {
                     " app.use('/checkout', checkoutRouter);",
                 ]),
             ]),
-            isStaged: true,
             isViewed: true
         ),
         ChangedFile(
@@ -78,8 +76,7 @@ extension SampleData {
                     "   STRIPE_KEY: required('STRIPE_KEY'),",
                     " };",
                 ]),
-            ]),
-            isStaged: true
+            ])
         ),
         ChangedFile(
             diff: FileDiff("src/routes/checkout.ts", .modified, hunks: [
@@ -107,8 +104,7 @@ extension SampleData {
                     " ",
                     " export { checkoutRouter };",
                 ]),
-            ]),
-            isStaged: true
+            ])
         ),
         ChangedFile(
             diff: FileDiff("test/rateLimit.test.ts", .added, hunks: [
@@ -141,7 +137,6 @@ extension SampleData {
                     #"     "typescript": "^5.6.3""#,
                 ]),
             ]),
-            isStaged: true,
             isViewed: true
         ),
         ChangedFile(
@@ -158,8 +153,7 @@ extension SampleData {
                     "-  };",
                     "-};",
                 ]),
-            ]),
-            isStaged: true
+            ])
         ),
     ]
 
@@ -196,8 +190,7 @@ extension SampleData {
                     "+  total: 5_184,",
                     "+};",
                 ]),
-            ]),
-            isStaged: true
+            ])
         ),
         ChangedFile(
             diff: FileDiff("jest.config.js", .modified, hunks: [

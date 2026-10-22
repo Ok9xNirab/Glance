@@ -3,6 +3,7 @@
 //  Glance
 //
 
+import AppKit
 import SwiftUI
 
 struct ChangesColumn: View {
@@ -16,7 +17,7 @@ struct ChangesColumn: View {
                 ViewModePicker()
                 SearchField("Filter", text: $changes.filter)
                 if !changes.files.isEmpty {
-                    stageAllRow
+                    summaryRow
                 }
             }
             .padding(.horizontal, 12)
@@ -56,18 +57,10 @@ struct ChangesColumn: View {
         }
     }
 
-    private var stageAllRow: some View {
+    private var summaryRow: some View {
         HStack(spacing: 8) {
-            if changes.isReadOnly {
-                Text("\(changes.files.count) \(changes.files.count == 1 ? "file" : "files") changed")
-                    .foregroundStyle(Palette.secondaryText)
-            } else {
-                Toggle(isOn: Binding(get: { changes.allStaged }, set: { _ in changes.toggleAllStaged() })) {
-                    Text("\(changes.stagedPaths.count) of \(changes.files.count) staged")
-                        .foregroundStyle(Palette.secondaryText)
-                }
-                .toggleStyle(.checkbox)
-            }
+            Text("\(changes.files.count) \(changes.files.count == 1 ? "file" : "files") changed")
+                .foregroundStyle(Palette.secondaryText)
             Spacer(minLength: 0)
             LineStats(additions: changes.totalAdditions, deletions: changes.totalDeletions)
         }
@@ -135,20 +128,18 @@ private struct ChangedFileRow: View {
     @State private var isHovered = false
 
     var body: some View {
-        let isSelected = file.id == changes.selectedPath
+        let isSelected = changes.selectedPaths.contains(file.id)
         let isViewed = changes.isViewed(file)
         HStack(spacing: 8) {
-            if !changes.isReadOnly {
-                Toggle("Stage \(file.diff.path)", isOn: Binding(
-                    get: { changes.isStaged(file) },
-                    set: { changes.setStaged(file, $0) }
-                ))
-                .toggleStyle(.checkbox)
-                .labelsHidden()
-            }
-
             Button {
-                changes.select(file)
+                let modifiers = NSEvent.modifierFlags
+                if modifiers.contains(.command) {
+                    changes.toggleSelection(file)
+                } else if modifiers.contains(.shift) {
+                    changes.extendSelection(to: file)
+                } else {
+                    changes.select(file)
+                }
             } label: {
                 HStack(spacing: 7) {
                     StatusBadge(status: file.diff.status, inverted: isSelected)
@@ -183,5 +174,18 @@ private struct ChangedFileRow: View {
                 .fill(isSelected ? accent : isHovered ? Palette.hover : .clear)
         )
         .onHover { isHovered = $0 }
+        .contextMenu { menu }
+    }
+
+    /// Acts on the whole selection when the row is part of it, as Finder does, or else on just this file.
+    @ViewBuilder private var menu: some View {
+        let targets = changes.selectedPaths.contains(file.id) ? changes.selectedFiles : [file]
+        let allViewed = targets.allSatisfy(changes.isViewed)
+        let count = targets.count == 1 ? "" : " \(targets.count) Files"
+        Button(allViewed ? "Mark\(count) as Not Viewed" : "Mark\(count) as Viewed") { changes.setViewed(targets, !allViewed) }
+        if !changes.isReadOnly {
+            Divider()
+            Button("Discard Changes\(targets.count == 1 ? "" : " to \(targets.count) Files")") { changes.discard(targets) }
+        }
     }
 }

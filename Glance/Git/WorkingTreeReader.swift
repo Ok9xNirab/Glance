@@ -37,8 +37,6 @@ nonisolated struct WorkingTreeChange: Sendable {
 
     let path: String
     let status: FileStatus
-    /// Every change is in the index, so committing now would include all of it.
-    let isStaged: Bool
     /// The positions of the hunks that are in the index exactly as shown.
     var stagedHunks: Set<Int> = []
     /// `nil` for binary files and files too large to show.
@@ -70,13 +68,13 @@ nonisolated enum WorkingTreeReader {
 
         return entries.map { entry in
             if entry.isUntracked {
-                return WorkingTreeChange(path: entry.path, status: .added, isStaged: false, hunks: untrackedHunks(worktree.appending(path: entry.path)))
+                return WorkingTreeChange(path: entry.path, status: .added, hunks: untrackedHunks(worktree.appending(path: entry.path)))
             }
             let status: FileStatus = entry.code.contains("D") ? .deleted : entry.code.contains("A") ? .added : .modified
             let hunks = hunksByPath[entry.path] ?? []
             let staged = stagedHunksByPath[entry.path].flatMap(\.self) ?? []
             let stagedHunks = hunks.map { hunks in hunks.indices.filter { staged.contains(hunks[$0]) } } ?? []
-            return WorkingTreeChange(path: entry.path, status: status, isStaged: entry.isStaged, stagedHunks: Set(stagedHunks), hunks: hunks)
+            return WorkingTreeChange(path: entry.path, status: status, stagedHunks: Set(stagedHunks), hunks: hunks)
         }
         .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
     }
@@ -86,7 +84,7 @@ nonisolated enum WorkingTreeReader {
         // `--` after the range keeps a branch named like a file from being read as a path.
         let diff = try await Git.run(git + ["diff", "\(base)...\(branch)"] + diffOptions + ["--"], in: repository)
         return parseDiff(diff)
-            .map { WorkingTreeChange(path: $0.key, status: $0.value.status, isStaged: false, hunks: $0.value.hunks) }
+            .map { WorkingTreeChange(path: $0.key, status: $0.value.status, hunks: $0.value.hunks) }
             .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
     }
 
@@ -94,7 +92,7 @@ nonisolated enum WorkingTreeReader {
     static func read(commit: String, in repository: URL) async throws -> [WorkingTreeChange] {
         let diff = try await Git.run(git + ["show", "--format=", "--diff-merges=first-parent"] + diffOptions + [commit, "--"], in: repository)
         return parseDiff(diff)
-            .map { WorkingTreeChange(path: $0.key, status: $0.value.status, isStaged: false, hunks: $0.value.hunks) }
+            .map { WorkingTreeChange(path: $0.key, status: $0.value.status, hunks: $0.value.hunks) }
             .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
     }
 
@@ -114,7 +112,6 @@ nonisolated enum WorkingTreeReader {
         let path: String
 
         var isUntracked: Bool { code == "??" }
-        var isStaged: Bool { code.first != " " && code.last == " " }
     }
 
     /// Entries look like "XY path", separated by NUL bytes.

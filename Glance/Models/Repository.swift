@@ -45,8 +45,7 @@ struct ChangedFile: Identifiable {
     let diff: FileDiff
     /// How long ago an agent last wrote this file, while it's still being edited.
     var agentEditedAgo: String?
-    var isStaged = false
-    /// The positions of the hunks that are staged as shown.
+    /// The positions of the hunks that are in git's index as shown, which discarding has to undo too.
     var stagedHunks: Set<Int> = []
     var isViewed = false
 

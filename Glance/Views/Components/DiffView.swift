@@ -5,10 +5,8 @@
 
 import SwiftUI
 
-/// What the hunk headers' Stage and Discard buttons do, by hunk position.
+/// What the hunk headers' Discard button does, by hunk position.
 struct HunkActions {
-    let isStaged: (Int) -> Bool
-    let toggleStaged: (Int) -> Void
     let discard: (Int) -> Void
     /// Discarding a new file moves it to the Trash rather than editing it.
     var discardsFile = false
@@ -42,7 +40,6 @@ private struct HunkHeader: View {
     let actions: HunkActions?
     @Environment(\.glanceAccent) private var accent
     @Environment(\.colorScheme) private var colorScheme
-    @State private var isConfirmingDiscard = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -51,19 +48,9 @@ private struct HunkHeader: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let actions {
-                HStack(spacing: 6) {
-                    Button(actions.isStaged(hunk.id) ? "Unstage Hunk" : "Stage Hunk") { actions.toggleStaged(hunk.id) }
-                    Button("Discard") { isConfirmingDiscard = true }
-                }
-                .buttonStyle(BezelButtonStyle(height: 22))
-                .confirmationDialog(
-                    actions.discardsFile ? "Move this file to the Trash?" : "Discard this hunk?",
-                    isPresented: $isConfirmingDiscard
-                ) {
-                    Button(actions.discardsFile ? "Move to Trash" : "Discard", role: .destructive) { actions.discard(hunk.id) }
-                } message: {
-                    Text(actions.discardsFile ? "The file is new, so discarding it removes it." : "Its lines go back to how they are in the last commit. This can’t be undone.")
-                }
+                Button("Discard") { actions.discard(hunk.id) }
+                    .buttonStyle(BezelButtonStyle(height: 22))
+                    .help(actions.discardsFile ? "Move this new file to the Trash" : "Put these lines back the way they are in the last commit")
             }
         }
         .font(.mono(12))
