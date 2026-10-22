@@ -24,4 +24,4 @@ xcodebuild -project Glance.xcodeproj -scheme Glance -configuration Debug build
 ## Conventions
 
 - Use `Palette` tokens rather than raw colors; use the accent from `@Environment(\.glanceAccent)`.
-- Diff rows live in one `LazyVStack` with pinned hunk headers, so row IDs must be unique across hunks.
+- Diff rows live in one `LazyVStack` with pinned hunk headers, so row IDs must be unique across hunks and across the unified and split layouts.

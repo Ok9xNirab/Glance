@@ -44,6 +44,7 @@ struct DiffLine: Identifiable {
 }
 
 /// One row of the side-by-side layout. A `nil` side renders as an empty cell.
+/// IDs must not collide with `DiffLine` IDs, or the lazy stack reuses unified rows after switching layouts.
 struct SplitRow: Identifiable {
     struct Cell {
         let kind: DiffLine.Kind
@@ -130,7 +131,7 @@ extension DiffHunk {
                 let deletion = index < deletions.count ? deletions[index] : nil
                 let addition = index < additions.count ? additions[index] : nil
                 rows.append(SplitRow(
-                    id: "\(hunkID):\(rows.count)",
+                    id: "\(hunkID):split:\(rows.count)",
                     left: deletion.map { .init(kind: .deletion, number: $0.oldNumber, text: $0.text, syntax: $0.syntax) },
                     right: addition.map { .init(kind: .addition, number: $0.newNumber, text: $0.text, syntax: $0.syntax) }
                 ))
@@ -149,7 +150,7 @@ extension DiffHunk {
             case .context:
                 flush()
                 rows.append(SplitRow(
-                    id: "\(hunkID):\(rows.count)",
+                    id: "\(hunkID):split:\(rows.count)",
                     left: .init(kind: .context, number: line.oldNumber, text: line.text, syntax: line.syntax),
                     right: .init(kind: .context, number: line.newNumber, text: line.text, syntax: line.syntax)
                 ))
