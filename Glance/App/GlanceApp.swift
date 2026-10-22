@@ -20,5 +20,14 @@ struct GlanceApp: App {
         .commands {
             GlanceCommands()
         }
+
+        Window("About \(AppInfo.name)", id: "about") {
+            AboutView()
+                .windowMinimizeBehavior(.disabled)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+        .restorationBehavior(.disabled)
+        .defaultPosition(.center)
     }
 }

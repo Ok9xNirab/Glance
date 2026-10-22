@@ -11,6 +11,10 @@ struct GlanceCommands: Commands {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
+        CommandGroup(replacing: .appInfo) {
+            AboutCommand()
+        }
+
         // ⌘P is "Go to File…" here, not Print.
         CommandGroup(replacing: .printItem) {}
 
