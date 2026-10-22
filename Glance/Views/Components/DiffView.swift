@@ -70,7 +70,7 @@ private struct UnifiedDiffRow: View {
         HStack(alignment: .top, spacing: 0) {
             LineNumber(number: line.oldNumber, kind: line.kind)
             LineNumber(number: line.newNumber, kind: line.kind)
-            DiffCode(kind: line.kind, text: line.text)
+            DiffCode(kind: line.kind, text: line.text, syntax: line.syntax)
         }
         .fixedSize(horizontal: false, vertical: true)
         .background(line.kind.rowBackground)
@@ -93,7 +93,7 @@ private struct SplitDiffRow: View {
         if let cell {
             HStack(alignment: .top, spacing: 0) {
                 LineNumber(number: cell.number, kind: cell.kind)
-                DiffCode(kind: cell.kind, text: cell.text)
+                DiffCode(kind: cell.kind, text: cell.text, syntax: cell.syntax)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(cell.kind.rowBackground)
@@ -123,6 +123,7 @@ private struct LineNumber: View {
 private struct DiffCode: View {
     let kind: DiffLine.Kind
     let text: String
+    let syntax: [SyntaxSpan]
 
     var body: some View {
         Text(kind.sign)
@@ -130,9 +131,7 @@ private struct DiffCode: View {
             .foregroundStyle(kind.signColor)
             .frame(width: 22)
             .padding(.vertical, 3)
-        Text(text.isEmpty ? " " : text)
-            .font(.mono(12))
-            .foregroundStyle(Palette.code)
+        Text(AttributedString(code: text.isEmpty ? " " : text, spans: syntax, size: 12))
             .lineSpacing(5)
             .padding(.vertical, 3)
             .padding(.trailing, 20)

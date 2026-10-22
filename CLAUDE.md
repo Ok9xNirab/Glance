@@ -17,6 +17,7 @@ xcodebuild -project Glance.xcodeproj -scheme Glance -configuration Debug build
 - `Theme/`: `Palette` holds the design's light/dark color tokens; `glanceAccent` is an environment value.
 - `Models/`: plain value types (`FileDiff`, `Commit`, `Worktree`, `FileNode`). `RawHunk` lines use `+`/`-`/space prefixes.
 - `SampleData/`: all static content. Replace it with a git-backed source later.
+- `Syntax/`: `SyntaxHighlighter` parses with tree-sitter (SPM grammar packages) and maps captures onto `SyntaxToken`s. `FileDiff` highlights each hunk's old and new sides when it's built. `Views/Components/SyntaxStyle.swift` turns spans into `Palette.syntax*` colors. JavaScript is pinned to 0.23.1 and YAML to 0.7.0, because their newer manifests drop `scanner.c` when built as dependencies.
 - `State/`: `@Observable` models. `AppModel` owns one `ChangesModel` per worktree plus `HistoryModel` and `FilesModel`. Single-key shortcuts (J/K/V, arrows, ⌥S) go through `KeyboardShortcutMonitor`, which ignores keys while a text field is being edited.
 - `Views/`: Sidebar, Changes, History, Files, and the ⌘K Switcher, plus shared `Components/`.
 

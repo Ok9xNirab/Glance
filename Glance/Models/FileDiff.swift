@@ -40,6 +40,7 @@ struct DiffLine: Identifiable {
     let oldNumber: Int?
     let newNumber: Int?
     let text: String
+    var syntax: [SyntaxSpan] = []
 }
 
 /// One row of the side-by-side layout. A `nil` side renders as an empty cell.
@@ -48,6 +49,7 @@ struct SplitRow: Identifiable {
         let kind: DiffLine.Kind
         let number: Int?
         let text: String
+        let syntax: [SyntaxSpan]
     }
 
     let id: String
@@ -64,7 +66,7 @@ struct DiffHunk: Identifiable {
 }
 
 extension DiffHunk {
-    init(id: Int, raw: RawHunk) {
+    init(id: Int, raw: RawHunk, language: SourceLanguage) {
         var old = raw.oldStart
         var new = raw.newStart
         var oldCount = 0
@@ -91,6 +93,8 @@ extension DiffHunk {
             }
         }
 
+        Self.highlight(&lines, as: language)
+
         self.init(
             id: id,
             header: "@@ -\(raw.oldStart),\(oldCount) +\(raw.newStart),\(newCount) @@",
@@ -98,6 +102,21 @@ extension DiffHunk {
             lines: lines,
             splitRows: Self.pairRows(lines, hunkID: id)
         )
+    }
+
+    /// Highlights the old side (context and deletions) and the new side (context and additions) as two
+    /// continuous snippets, so each line is parsed with the lines around it.
+    private static func highlight(_ lines: inout [DiffLine], as language: SourceLanguage) {
+        let oldSide = lines.indices.filter { lines[$0].kind != .addition }
+        let newSide = lines.indices.filter { lines[$0].kind != .deletion }
+        let oldSpans = SyntaxHighlighter.spans(for: oldSide.map { lines[$0].text }, as: language)
+        let newSpans = SyntaxHighlighter.spans(for: newSide.map { lines[$0].text }, as: language)
+        for (index, spans) in zip(oldSide, oldSpans) where lines[index].kind == .deletion {
+            lines[index].syntax = spans
+        }
+        for (index, spans) in zip(newSide, newSpans) {
+            lines[index].syntax = spans
+        }
     }
 
     /// Pairs each run of deletions with the additions that follow it, so replaced lines sit side by side.
@@ -112,8 +131,8 @@ extension DiffHunk {
                 let addition = index < additions.count ? additions[index] : nil
                 rows.append(SplitRow(
                     id: "\(hunkID):\(rows.count)",
-                    left: deletion.map { .init(kind: .deletion, number: $0.oldNumber, text: $0.text) },
-                    right: addition.map { .init(kind: .addition, number: $0.newNumber, text: $0.text) }
+                    left: deletion.map { .init(kind: .deletion, number: $0.oldNumber, text: $0.text, syntax: $0.syntax) },
+                    right: addition.map { .init(kind: .addition, number: $0.newNumber, text: $0.text, syntax: $0.syntax) }
                 ))
             }
             deletions.removeAll()
@@ -131,8 +150,8 @@ extension DiffHunk {
                 flush()
                 rows.append(SplitRow(
                     id: "\(hunkID):\(rows.count)",
-                    left: .init(kind: .context, number: line.oldNumber, text: line.text),
-                    right: .init(kind: .context, number: line.newNumber, text: line.text)
+                    left: .init(kind: .context, number: line.oldNumber, text: line.text, syntax: line.syntax),
+                    right: .init(kind: .context, number: line.newNumber, text: line.text, syntax: line.syntax)
                 ))
             }
         }
@@ -154,7 +173,8 @@ struct FileDiff: Identifiable {
     var name: String { path.pathName }
 
     init(_ path: String, _ status: FileStatus, hunks rawHunks: [RawHunk]) {
-        let hunks = rawHunks.enumerated().map { DiffHunk(id: $0.offset, raw: $0.element) }
+        let language = SourceLanguage(path: path)
+        let hunks = rawHunks.enumerated().map { DiffHunk(id: $0.offset, raw: $0.element, language: language) }
         let lines = hunks.flatMap(\.lines)
         self.path = path
         self.status = status
