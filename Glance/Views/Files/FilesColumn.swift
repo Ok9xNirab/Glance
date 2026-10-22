@@ -33,7 +33,11 @@ struct FilesColumn: View {
 
             let rows = files.rows
             if rows.isEmpty {
-                PaneMessage(files.query.isEmpty ? "No changed files." : "No files match “\(files.query)”")
+                if files.isLoaded {
+                    PaneMessage(!files.query.isEmpty ? "No files match “\(files.query)”" : files.changedOnly ? "No changed files." : "No files.")
+                } else {
+                    Spacer()
+                }
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -102,13 +106,13 @@ private struct FileTreeRow: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                if node.isFolder, node.containsChanges, !isExpanded {
+                if node.isFolder, row.containsChanges, !isExpanded {
                     Circle()
                         .fill(isSelected ? .white : Palette.modifiedBar)
                         .frame(width: 6, height: 6)
                         .help("Contains changes")
                 }
-                if let status = node.status {
+                if let status = row.status {
                     StatusBadge(status: status, size: 15, inverted: isSelected)
                 }
             }

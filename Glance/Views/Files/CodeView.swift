@@ -66,6 +66,9 @@ struct CodeView: NSViewRepresentable {
 
         if coordinator.path != path {
             coordinator.load(path, content: content, language: language)
+        } else if coordinator.content != content {
+            // The file changed on disk, or its changes did.
+            coordinator.reload(content, language: language)
         } else if files.selectedLines != coordinator.reportedLines {
             // The model moved the selection itself, e.g. by reopening the file.
             textView.moveCaret(toLine: files.currentLine)
@@ -77,6 +80,7 @@ struct CodeView: NSViewRepresentable {
         var copy: (String) -> Void = { _ in }
         weak var textView: CodeTextView?
         private(set) var path: String?
+        private(set) var content: FileContent?
         /// The lines last written to the model, so selection changes that come from the model can be told apart.
         private(set) var reportedLines: ClosedRange<Int>?
 
@@ -89,9 +93,26 @@ struct CodeView: NSViewRepresentable {
             // Read the line first: replacing the text reports a selection of its own.
             let line = files.currentLine
             self.path = path
+            self.content = content
             textView.show(content, as: language)
             textView.scroll(.zero)
             textView.moveCaret(toLine: line)
+        }
+
+        /// Shows the same file's new contents where the old ones were, keeping the scroll position and selection.
+        func reload(_ content: FileContent, language: SourceLanguage) {
+            guard let textView, let scrollView = textView.enclosingScrollView else { return }
+            let origin = scrollView.contentView.bounds.origin
+            let selection = textView.selectedRange()
+            self.content = content
+            textView.show(content, as: language)
+            if let container = textView.textContainer { textView.layoutManager?.ensureLayout(for: container) }
+            scrollView.contentView.scroll(to: origin)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+            let length = (textView.string as NSString).length
+            let location = min(selection.location, length)
+            textView.setSelectedRange(NSRange(location: location, length: min(selection.length, length - location)))
+            scrollView.verticalRulerView?.needsDisplay = true
         }
 
         func copyPath(includingLines: Bool) {

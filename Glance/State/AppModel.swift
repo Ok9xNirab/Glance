@@ -36,7 +36,6 @@ final class AppModel {
 
     let avatars = AvatarStore()
     let remoteDetails = RemoteDetailsStore()
-    let files = FilesModel(tree: FileNode.build(SampleData.fileTree), contents: SampleData.fileContents)
 
     /// Which copy action most recently put text on the pasteboard, shown as feedback for a moment.
     private(set) var recentlyCopied: CopyTarget?
@@ -45,6 +44,7 @@ final class AppModel {
     @ObservationIgnored private var changesByBranch: [String: ChangesModel] = [:]
     @ObservationIgnored private var historyByWorktree: [Worktree.ID: HistoryModel] = [:]
     @ObservationIgnored private var historyByBranch: [String: HistoryModel] = [:]
+    @ObservationIgnored private var filesByWorktree: [Worktree.ID: FilesModel] = [:]
     /// The worktree last open in each repository, so switching back returns to it.
     @ObservationIgnored private var lastWorktreeIDs: [Repository.ID: Worktree.ID] = [:]
 
@@ -108,6 +108,16 @@ final class AppModel {
         let history = HistoryModel(url: currentWorktree.url)
         historyByWorktree[currentWorktree.id] = history
         return history
+    }
+
+    /// The current worktree's files, even while a branch is previewed, since a branch without a worktree has no files
+    /// on disk.
+    var files: FilesModel {
+        let worktree = currentWorktree
+        if let files = filesByWorktree[worktree.id] { return files }
+        let files = FilesModel(url: worktree.url, changes: changes(for: worktree))
+        filesByWorktree[worktree.id] = files
+        return files
     }
 
     func changes(for worktree: Worktree) -> ChangesModel {
@@ -174,6 +184,7 @@ final class AppModel {
         for worktree in repository.worktrees {
             changesByWorktree[worktree.id] = nil
             historyByWorktree[worktree.id] = nil
+            filesByWorktree[worktree.id] = nil
         }
         RepositoryBookmarks.save(repositories.map(\.url))
         repository.url.stopAccessingSecurityScopedResource()
@@ -191,6 +202,7 @@ final class AppModel {
         let ids = Set(worktrees.map(\.id))
         changesByWorktree = changesByWorktree.filter { ids.contains($0.key) }
         historyByWorktree = historyByWorktree.filter { ids.contains($0.key) }
+        filesByWorktree = filesByWorktree.filter { ids.contains($0.key) }
         if let branch = previewedBranch, !(currentRepository?.branches.contains { $0.name == branch.name } ?? false) {
             previewedBranch = nil
         }

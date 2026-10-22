@@ -22,21 +22,25 @@ struct FileEditor: View {
                         model.copy($0, as: .path)
                     }
                     Minimap(content: content)
+                } else if let message = files.activeMessage {
+                    PaneMessage(message)
                 } else {
-                    PaneMessage(files.activePath == nil
-                        ? "No file open. Pick one from the tree or press ⌘P."
-                        : "This file's contents aren't included in the sample data.")
+                    // Still reading the file.
+                    Palette.window
                 }
             }
 
             StatusBar {
-                Text(files.activeContent == nil ? "Line 0, Column 0" : "Line \(files.currentLine), Column \(files.currentColumn)")
-                if files.activeContent != nil, files.selectedLines.count > 1 {
+                let content = files.activeContent
+                Text(content == nil ? "Line 0, Column 0" : "Line \(files.currentLine), Column \(files.currentColumn)")
+                if content != nil, files.selectedLines.count > 1 {
                     Text("\(files.selectedLines.count) lines selected")
                 }
                 Text(language?.rawValue ?? "—")
-                Text("Spaces: 2")
-                Text("UTF-8 · LF")
+                if let content {
+                    if let indentation = content.indentation { Text(indentation) }
+                    Text("UTF-8 · \(content.lineEnding)")
+                }
                 Spacer(minLength: 0)
                 Text("\(files.allFiles.count) files · \(files.changedCount) changed")
                 ShortcutHint(keys: ["⌘P"], label: "go to file")
@@ -189,17 +193,14 @@ private struct Minimap: View {
     let content: FileContent
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            ForEach(Array(content.lines.enumerated()), id: \.offset) { index, line in
-                let indent = line.prefix { $0 == " " }.count
+        // Drawn rather than laid out, and only as far as it shows, since a real file can run to thousands of lines.
+        Canvas { context, size in
+            for (index, line) in content.lines.prefix(Int(size.height / 3) + 1).enumerated() {
+                let indent = line.prefix { $0 == " " || $0 == "\t" }.reduce(0) { $0 + ($1 == "\t" ? 4 : 1) }
                 let length = line.trimmingCharacters(in: .whitespaces).count
-                HStack(spacing: 0) {
-                    Color.clear.frame(width: CGFloat(min(indent, 30)) * 1.1)
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(content.marks[index + 1]?.barColor ?? Palette.minimapLine)
-                        .frame(width: CGFloat(min(length, 62)) * 1.1, height: 2)
-                }
-                .frame(height: 2)
+                guard length > 0 else { continue }
+                let rect = CGRect(x: CGFloat(min(indent, 30)) * 1.1, y: CGFloat(index) * 3, width: CGFloat(min(length, 62)) * 1.1, height: 2)
+                context.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(content.marks[index + 1]?.barColor ?? Palette.minimapLine))
             }
         }
         .padding(.horizontal, 8)
