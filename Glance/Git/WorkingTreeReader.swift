@@ -90,6 +90,14 @@ nonisolated enum WorkingTreeReader {
             .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
     }
 
+    /// What `commit` changed. A merge is compared with its first parent, the branch it was merged into.
+    static func read(commit: String, in repository: URL) async throws -> [WorkingTreeChange] {
+        let diff = try await Git.run(git + ["show", "--format=", "--diff-merges=first-parent"] + diffOptions + [commit, "--"], in: repository)
+        return parseDiff(diff)
+            .map { WorkingTreeChange(path: $0.key, status: $0.value.status, isStaged: false, hunks: $0.value.hunks) }
+            .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    }
+
     /// How many commits `HEAD` is ahead of and behind its upstream, or `nil` when the branch doesn't track one.
     static func readUpstream(_ worktree: URL) async -> (ahead: Int, behind: Int)? {
         guard let output = try? await Git.run(git + ["rev-list", "--left-right", "--count", "HEAD...@{upstream}"], in: worktree)

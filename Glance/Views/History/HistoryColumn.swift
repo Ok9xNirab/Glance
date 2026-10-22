@@ -19,14 +19,18 @@ struct HistoryColumn: View {
             .padding(.top, 10)
             .padding(.bottom, 8)
 
-            if history.visibleCommits.isEmpty {
+            if !history.isLoaded {
+                Spacer()
+            } else if history.commits.isEmpty {
+                PaneMessage("No commits yet.")
+            } else if history.visibleCommits.isEmpty {
                 PaneMessage("No commits match “\(history.filter)”")
             } else {
                 ScrollView {
                     LazyVStack(spacing: 1) {
                         ForEach(history.visibleCommits) { commit in
                             if commit.startsRemoteHistory, history.filter.isEmpty {
-                                RemoteDivider(name: "origin/\(model.currentWorktree.branch)")
+                                RemoteDivider(name: history.upstream ?? "pushed")
                             }
                             CommitRow(commit: commit, history: history)
                         }
@@ -76,8 +80,9 @@ private struct CommitRow: View {
                 HStack(spacing: 6) {
                     Avatar(author: commit.author)
                     Text(commit.author.name)
-                    if commit.isAgentCoAuthored {
-                        AgentChip(title: "agent", inverted: isSelected)
+                    if !commit.agents.isEmpty {
+                        AgentChip(title: commit.agents.map(\.product).formatted(), inverted: isSelected)
+                            .help("Co-authored by \(commit.agents.map(\.credit).formatted())")
                     }
                     if let tag = commit.tag {
                         TagChip(title: tag, inverted: isSelected)
@@ -89,7 +94,7 @@ private struct CommitRow: View {
                             .font(.system(size: 10))
                             .help("Not pushed")
                     }
-                    Text(commit.sha).font(.mono(11, weight: .medium))
+                    Text(commit.shortSHA).font(.mono(11, weight: .medium))
                 }
                 .font(.system(size: 11))
                 .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Palette.secondaryText)

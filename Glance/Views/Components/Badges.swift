@@ -147,17 +147,31 @@ struct TagChip: View {
     }
 }
 
+/// A committer's avatar from GitHub or Gravatar. Until it loads, and when there's none, it's a colored circle with
+/// their initial.
 struct Avatar: View {
     let author: Author
     var size: CGFloat = 16
+    @Environment(AppModel.self) private var model
 
     var body: some View {
-        Text(author.initial)
-            .font(.system(size: size * 0.56, weight: .bold))
-            .foregroundStyle(.white)
-            .frame(width: size, height: size)
-            .background(Circle().fill(author.color))
-            .accessibilityHidden(true)
+        Group {
+            if let image = model.avatars.committerAvatar(email: author.email) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .clipShape(Circle())
+            } else {
+                Text(author.initial)
+                    .font(.system(size: size * 0.56, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: size, height: size)
+                    .background(Circle().fill(author.color))
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+        .task(id: author.email) { await model.avatars.loadCommitter(email: author.email) }
     }
 }
 

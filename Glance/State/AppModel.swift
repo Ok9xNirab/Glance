@@ -36,7 +36,6 @@ final class AppModel {
 
     let avatars = AvatarStore()
     let remoteDetails = RemoteDetailsStore()
-    let history = HistoryModel(commits: SampleData.commits)
     let files = FilesModel(tree: FileNode.build(SampleData.fileTree), contents: SampleData.fileContents)
 
     /// Which copy action most recently put text on the pasteboard, shown as feedback for a moment.
@@ -44,6 +43,8 @@ final class AppModel {
     private var copyResetTask: Task<Void, Never>?
     @ObservationIgnored private var changesByWorktree: [Worktree.ID: ChangesModel] = [:]
     @ObservationIgnored private var changesByBranch: [String: ChangesModel] = [:]
+    @ObservationIgnored private var historyByWorktree: [Worktree.ID: HistoryModel] = [:]
+    @ObservationIgnored private var historyByBranch: [String: HistoryModel] = [:]
     /// The worktree last open in each repository, so switching back returns to it.
     @ObservationIgnored private var lastWorktreeIDs: [Repository.ID: Worktree.ID] = [:]
 
@@ -91,6 +92,22 @@ final class AppModel {
         previewedBranch = branch
         // Read again in case the branch moved since it was last shown.
         changes.refresh()
+        history.refresh()
+    }
+
+    var history: HistoryModel {
+        if let previewedBranch, let repository = currentRepository {
+            let key = "\(repository.id.path)\n\(previewedBranch.name)"
+            if let history = historyByBranch[key] { return history }
+            // A branch without a worktree only moves when something else commits to it, so it isn't watched.
+            let history = HistoryModel(url: repository.url, revision: previewedBranch.name, watches: false)
+            historyByBranch[key] = history
+            return history
+        }
+        if let history = historyByWorktree[currentWorktree.id] { return history }
+        let history = HistoryModel(url: currentWorktree.url)
+        historyByWorktree[currentWorktree.id] = history
+        return history
     }
 
     func changes(for worktree: Worktree) -> ChangesModel {
@@ -154,7 +171,10 @@ final class AppModel {
 
     func removeRepository(_ repository: Repository) {
         repositories.removeAll { $0.id == repository.id }
-        for worktree in repository.worktrees { changesByWorktree[worktree.id] = nil }
+        for worktree in repository.worktrees {
+            changesByWorktree[worktree.id] = nil
+            historyByWorktree[worktree.id] = nil
+        }
         RepositoryBookmarks.save(repositories.map(\.url))
         repository.url.stopAccessingSecurityScopedResource()
         recentRepositoryPaths.removeAll { $0 == repository.url.path }
@@ -170,6 +190,7 @@ final class AppModel {
         repositories = repositories.map { (try? GitRepositoryReader.read($0.url)) ?? $0 }
         let ids = Set(worktrees.map(\.id))
         changesByWorktree = changesByWorktree.filter { ids.contains($0.key) }
+        historyByWorktree = historyByWorktree.filter { ids.contains($0.key) }
         if let branch = previewedBranch, !(currentRepository?.branches.contains { $0.name == branch.name } ?? false) {
             previewedBranch = nil
         }
@@ -242,7 +263,7 @@ final class AppModel {
         case .changes:
             if let file = changes.selectedFile { copy(file.diff.patch, as: .agentContext) }
         case .history:
-            if let commit = history.selectedCommit { copy(commit.agentText, as: .agentContext) }
+            if let text = history.agentText { copy(text, as: .agentContext) }
         case .files:
             if let path = files.activePath { copy(path, as: .path) }
         }

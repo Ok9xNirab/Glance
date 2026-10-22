@@ -15,14 +15,15 @@ struct CommitDetail: View {
                 toolbar(for: commit)
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0, pinnedViews: .sectionHeaders) {
-                        CommitSummary(commit: commit, selectedFileIndex: $history.selectedFileIndex)
-                        if let hunks = history.selectedFile?.hunks {
-                            DiffHunksView(hunks: hunks, layout: model.diffLayout)
-                        } else if !commit.files.isEmpty {
-                            Text("The diff for this commit loads when it is selected.")
-                                .foregroundStyle(Palette.secondaryText)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 48)
+                        CommitSummary(commit: commit, files: history.selectedFiles, selectedFileIndex: $history.selectedFileIndex)
+                        if let file = history.selectedFile {
+                            if let hunks = file.hunks {
+                                DiffHunksView(hunks: hunks, layout: model.diffLayout)
+                            } else {
+                                message("Binary file, or too large to show.")
+                            }
+                        } else if history.selectedFiles?.isEmpty == true {
+                            message("This commit doesn’t change any files.")
                         }
                     }
                 }
@@ -32,7 +33,7 @@ struct CommitDetail: View {
                 PaneMessage("No commit selected.")
             }
             StatusBar {
-                Text("\(history.unpushedCount) commits not pushed")
+                Text(history.unpushedCount == 1 ? "1 commit not pushed" : "\(history.unpushedCount) commits not pushed")
                 Text(model.currentWorktree.path).font(.mono(11))
                 Spacer(minLength: 0)
                 ShortcutHint(keys: ["↑", "↓"], label: "commits")
@@ -41,6 +42,13 @@ struct CommitDetail: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Palette.window)
+    }
+
+    private func message(_ text: String) -> some View {
+        Text(text)
+            .foregroundStyle(Palette.secondaryText)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 48)
     }
 
     private func toolbar(for commit: Commit) -> some View {
@@ -53,9 +61,6 @@ struct CommitDetail: View {
             ToolbarSeparator()
             CopyForAgentButton()
             Menu {
-                Button("Revert Commit") {}
-                Button("Cherry-Pick onto Current Branch") {}
-                Divider()
                 Button("Copy SHA") { model.copy(commit.sha, as: .sha) }
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -66,7 +71,7 @@ struct CommitDetail: View {
             .menuIndicator(.hidden)
             .tint(Palette.secondaryText)
             .frame(width: 28, height: 28)
-            .help("Revert, cherry-pick, copy SHA")
+            .help("Copy SHA")
         }
     }
 }
@@ -74,6 +79,8 @@ struct CommitDetail: View {
 /// Commit message, metadata and the file tabs that pick which diff is shown below.
 private struct CommitSummary: View {
     let commit: Commit
+    /// `nil` while they're read.
+    let files: [FileDiff]?
     @Binding var selectedFileIndex: Int
 
     var body: some View {
@@ -93,20 +100,23 @@ private struct CommitSummary: View {
                     Avatar(author: commit.author, size: 20)
                     Text(commit.author.name).foregroundStyle(Palette.text)
                 }
-                if commit.isAgentCoAuthored {
-                    AgentChip(title: "Co-authored by agent")
+                if !commit.agents.isEmpty {
+                    AgentChip(title: "Co-authored by \(commit.agents.map(\.name).formatted())")
+                        .help("Co-authored by \(commit.agents.map(\.credit).formatted())")
                 }
-                Text(commit.date)
-                Text(commit.sha).font(.mono(12))
-                Text("\(commit.files.count) files")
-                LineStats(additions: commit.additions, deletions: commit.deletions)
+                Text(commit.formattedDate)
+                Text(commit.shortSHA).font(.mono(12))
+                if let files {
+                    Text(files.count == 1 ? "1 file" : "\(files.count) files")
+                    LineStats(additions: files.reduce(0) { $0 + $1.additions }, deletions: files.reduce(0) { $0 + $1.deletions })
+                }
             }
             .font(.system(size: 12))
             .foregroundStyle(Palette.secondaryText)
 
-            if !commit.files.isEmpty {
+            if let files, !files.isEmpty {
                 FlowLayout(spacing: 6) {
-                    ForEach(Array(commit.files.enumerated()), id: \.element.id) { index, file in
+                    ForEach(Array(files.enumerated()), id: \.element.id) { index, file in
                         CommitFileTab(file: file, isSelected: index == selectedFileIndex) {
                             selectedFileIndex = index
                         }

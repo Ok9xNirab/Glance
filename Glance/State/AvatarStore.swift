@@ -4,10 +4,12 @@
 //
 
 import AppKit
+import CryptoKit
 import Foundation
 import Observation
 
-/// Fetches the avatars of repository owners from their Git host and caches them on disk for a week.
+/// Fetches the avatars of repository owners from their Git host, and of committers from GitHub or Gravatar, and
+/// caches them on disk for a week.
 @Observable
 final class AvatarStore {
     struct Avatar {
@@ -17,6 +19,7 @@ final class AvatarStore {
     }
 
     private(set) var avatars: [String: Avatar] = [:]
+    private(set) var committerAvatars: [String: NSImage] = [:]
     @ObservationIgnored private var requested: Set<String> = []
 
     private static let maxAge: TimeInterval = 7 * 24 * 60 * 60
@@ -41,6 +44,62 @@ final class AvatarStore {
 
         avatars[key] = Avatar(image: image, isOrganization: profile.isOrganization)
         Self.writeCache(key: key, data: data, isOrganization: profile.isOrganization)
+    }
+
+    // MARK: Committers
+
+    func committerAvatar(email: String) -> NSImage? {
+        committerAvatars[Self.key(email: email)]
+    }
+
+    /// Loads the avatar of whoever commits as `email`. Emails without one are remembered for a week too, so they
+    /// aren't looked up on every launch.
+    func loadCommitter(email: String) async {
+        let key = Self.key(email: email)
+        guard !email.isEmpty, requested.insert(key).inserted else { return }
+
+        let missFile = Self.cacheDirectory.appending(path: key + ".none")
+        if let cached = Self.readCache(key: key) {
+            committerAvatars[key] = cached.avatar.image
+            guard Date.now.timeIntervalSince(cached.date) > Self.maxAge else { return }
+        } else if let date = (try? missFile.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
+                  Date.now.timeIntervalSince(date) < Self.maxAge {
+            return
+        }
+
+        guard let url = Self.committerAvatarURL(email: email),
+              let (data, response) = try? await URLSession.shared.data(from: url)
+        else { return }
+        guard (response as? HTTPURLResponse)?.statusCode == 200, let image = NSImage(data: data) else {
+            // Gravatar answers 404 for an email it doesn't know.
+            if (response as? HTTPURLResponse)?.statusCode == 404 {
+                try? FileManager.default.createDirectory(at: Self.cacheDirectory, withIntermediateDirectories: true)
+                try? Data().write(to: missFile)
+            }
+            return
+        }
+        committerAvatars[key] = image
+        Self.writeCache(key: key, data: data, isOrganization: false)
+        try? FileManager.default.removeItem(at: missFile)
+    }
+
+    /// Keyed by the email's hash, which is also how Gravatar looks it up, so cache file names don't hold emails.
+    private static func key(email: String) -> String {
+        let digest = SHA256.hash(data: Data(email.trimmingCharacters(in: .whitespaces).lowercased().utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// GitHub's noreply addresses name the account, as `12345+name@` or, for older accounts, `name@`. Any other
+    /// email is looked up on Gravatar, which answers 404 rather than a placeholder when it has no image.
+    private static func committerAvatarURL(email: String) -> URL? {
+        let parts = email.lowercased().split(separator: "@")
+        if parts.count == 2, parts[1] == "users.noreply.github.com" {
+            if let plus = parts[0].firstIndex(of: "+"), let id = Int(parts[0][..<plus]) {
+                return URL(string: "https://avatars.githubusercontent.com/u/\(id)?s=80")
+            }
+            return URL(string: "https://github.com/\(parts[0]).png?size=80")
+        }
+        return URL(string: "https://gravatar.com/avatar/\(key(email: email))?s=80&d=404")
     }
 
     // MARK: Disk cache
