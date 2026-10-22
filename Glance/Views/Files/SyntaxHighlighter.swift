@@ -3,6 +3,7 @@
 //  Glance
 //
 
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -45,10 +46,16 @@ enum SyntaxHighlighter {
         pattern: #"(//.*$)|('(?:\\.|[^'])*'|"(?:\\.|[^"])*"|`(?:\\.|[^`])*`)|(\b\d[\d_]*(?:\.\d+)?\b)|([A-Za-z_$][\w$]*)"#
     )
 
-    static func highlight(_ line: String, as language: SourceLanguage) -> AttributedString {
-        tokenize(line, as: language).reduce(into: AttributedString()) { result, piece in
-            result += styled(piece.text, piece.token)
+    /// Highlights `lines` as one newline-joined string, ready for a text view.
+    static func highlight(_ lines: [String], as language: SourceLanguage, font: NSFont) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+        for (index, line) in lines.enumerated() {
+            if index > 0 { result.append(styled("\n", .plain, font: font)) }
+            for piece in tokenize(line, as: language) {
+                result.append(styled(piece.text, piece.token, font: font))
+            }
         }
+        return result
     }
 
     private static func tokenize(_ line: String, as language: SourceLanguage) -> [(text: String, token: Token)] {
@@ -104,24 +111,25 @@ enum SyntaxHighlighter {
         return pieces
     }
 
-    private static func styled(_ text: String, _ token: Token) -> AttributedString {
-        var piece = AttributedString(text)
+    private static func styled(_ text: String, _ token: Token, font: NSFont) -> NSAttributedString {
+        let color: Color
+        var font = font
         switch token {
         case .plain:
-            break
+            color = Palette.code
         case .keyword:
-            piece.foregroundColor = Palette.syntaxKeyword
-            piece.inlinePresentationIntent = .stronglyEmphasized
+            color = Palette.syntaxKeyword
+            font = .monospacedSystemFont(ofSize: font.pointSize, weight: .bold)
         case .string:
-            piece.foregroundColor = Palette.syntaxString
+            color = Palette.syntaxString
         case .comment:
-            piece.foregroundColor = Palette.syntaxComment
-            piece.inlinePresentationIntent = .emphasized
+            color = Palette.syntaxComment
+            font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
         case .number:
-            piece.foregroundColor = Palette.syntaxNumber
+            color = Palette.syntaxNumber
         case .type:
-            piece.foregroundColor = Palette.syntaxType
+            color = Palette.syntaxType
         }
-        return piece
+        return NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: NSColor(color)])
     }
 }

@@ -36,7 +36,9 @@ final class FilesModel {
         Tab(path: "src/middleware/rateLimit.ts", isPreview: true),
     ]
     var activePath: String? = "src/middleware/rateLimit.ts"
-    var currentLine = 19
+    /// The lines the editor's selection touches; a bare caret selects just its own line.
+    var selectedLines = 19...19
+    var currentColumn = 1
     var query = ""
     var changedOnly = false
     /// Set by ⌘P; the file list focuses its search field and clears this.
@@ -73,6 +75,17 @@ final class FilesModel {
 
     var activeContent: FileContent? {
         activePath.flatMap { contents[$0] }
+    }
+
+    var currentLine: Int { selectedLines.lowerBound }
+
+    /// The active file with its selected lines, e.g. `src/app.ts:12-18`, for pasting into an agent prompt.
+    var activeReference: String? {
+        guard let activePath else { return nil }
+        let lines = selectedLines.count == 1
+            ? "\(selectedLines.lowerBound)"
+            : "\(selectedLines.lowerBound)-\(selectedLines.upperBound)"
+        return "\(activePath):\(lines)"
     }
 
     func status(of path: String) -> FileStatus? {
@@ -113,12 +126,14 @@ final class FilesModel {
             }
         }
         activePath = path
-        currentLine = 1
+        selectedLines = 1...1
+        currentColumn = 1
     }
 
     func activate(_ tab: Tab) {
         activePath = tab.path
-        currentLine = 1
+        selectedLines = 1...1
+        currentColumn = 1
     }
 
     func close(_ tab: Tab) {

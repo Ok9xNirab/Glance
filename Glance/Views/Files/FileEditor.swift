@@ -16,24 +16,10 @@ struct FileEditor: View {
             EditorTabBar(files: files)
 
             HStack(spacing: 0) {
-                if let content = files.activeContent, let language {
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(Array(content.lines.enumerated()), id: \.offset) { index, line in
-                                EditorLine(
-                                    number: index + 1,
-                                    text: SyntaxHighlighter.highlight(line, as: language),
-                                    mark: content.marks[index + 1],
-                                    isCurrent: index + 1 == files.currentLine
-                                ) {
-                                    files.currentLine = index + 1
-                                }
-                            }
-                        }
-                        .padding(.top, 8)
-                        .padding(.bottom, 40)
+                if let content = files.activeContent, let language, let path = files.activePath {
+                    CodeView(path: path, content: content, language: language, files: files) {
+                        model.copy($0, as: .path)
                     }
-                    .id(files.activePath)
                     Minimap(content: content)
                 } else {
                     PaneMessage(files.activePath == nil
@@ -43,7 +29,10 @@ struct FileEditor: View {
             }
 
             StatusBar {
-                Text("Line \(files.activeContent == nil ? 0 : files.currentLine), Column 1")
+                Text(files.activeContent == nil ? "Line 0, Column 0" : "Line \(files.currentLine), Column \(files.currentColumn)")
+                if files.activeContent != nil, files.selectedLines.count > 1 {
+                    Text("\(files.selectedLines.count) lines selected")
+                }
                 Text(language?.rawValue ?? "—")
                 Text("Spaces: 2")
                 Text("UTF-8 · LF")
@@ -184,37 +173,6 @@ private struct EditorTab: View {
     }
 }
 
-private struct EditorLine: View {
-    let number: Int
-    let text: AttributedString
-    let mark: FileContent.Mark?
-    let isCurrent: Bool
-    let select: () -> Void
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Rectangle()
-                .fill(mark?.barColor ?? .clear)
-                .frame(width: 3)
-            Text("\(number)")
-                .foregroundStyle(isCurrent ? Palette.text : Palette.gutter)
-                .padding(.trailing, 14)
-                .frame(width: 46, alignment: .trailing)
-            Text(text)
-                .foregroundStyle(Palette.code)
-                .lineLimit(1)
-                .fixedSize()
-                .padding(.trailing, 24)
-            Spacer(minLength: 0)
-        }
-        .font(.mono(12))
-        .frame(height: 20)
-        .background(isCurrent ? Palette.currentLine : .clear)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: select)
-    }
-}
-
 /// A scaled-down outline of the file, with changed lines tinted.
 private struct Minimap: View {
     let content: FileContent
@@ -248,7 +206,7 @@ private struct Minimap: View {
     }
 }
 
-private extension FileContent.Mark {
+extension FileContent.Mark {
     var barColor: Color {
         switch self {
         case .added: Palette.addedBar
