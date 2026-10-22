@@ -59,23 +59,23 @@ struct SidebarView: View {
                 }
             }
 
-            HStack(spacing: 2) {
-                IconButton("folder.badge.plus", help: "New Worktree or Branch") { model.isSwitcherPresented = true }
-                Spacer()
-                Button {
-                    model.isSwitcherPresented = true
-                } label: {
-                    HStack(spacing: 6) {
-                        KeyCap("⌘K")
-                        Text("Switch")
-                    }
-                    .font(.system(size: 11))
-                    .foregroundStyle(Palette.secondaryText)
+            Button {
+                model.isSwitcherPresented = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                    Text("Switch worktree…")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    KeyCap("⌘K")
                 }
-                .buttonStyle(.plain)
+                .font(.system(size: 11))
+                .foregroundStyle(Palette.secondaryText)
+                .padding(.horizontal, 8)
+                .frame(height: 26)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .buttonStyle(RowButtonStyle())
+            .padding(.horizontal, 6)
+            .padding(.vertical, 5)
             .overlay(alignment: .top) { Hairline() }
         }
         .frame(width: 220)

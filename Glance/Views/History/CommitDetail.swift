@@ -55,7 +55,6 @@ struct CommitDetail: View {
             Menu {
                 Button("Revert Commit") {}
                 Button("Cherry-Pick onto Current Branch") {}
-                Button("Create Branch from Commit…") {}
                 Divider()
                 Button("Copy SHA") { model.copy(commit.sha, as: .sha) }
             } label: {
@@ -67,7 +66,7 @@ struct CommitDetail: View {
             .menuIndicator(.hidden)
             .tint(Palette.secondaryText)
             .frame(width: 28, height: 28)
-            .help("Revert, cherry-pick, create branch, copy SHA")
+            .help("Revert, cherry-pick, copy SHA")
         }
     }
 }

@@ -178,61 +178,24 @@ final class AppModel {
         }
     }
 
-    // MARK: Worktrees and branches
-
-    /// Turns what was typed in the switcher into a branch name git accepts: "rate limit" becomes "rate-limit".
-    private func branchName(_ text: String) -> String {
-        text.trimmingCharacters(in: .whitespaces).split(whereSeparator: \.isWhitespace).joined(separator: "-")
-    }
-
-    /// Adds a worktree at `<repository>/.worktrees/<name>`, checking out `branch` or creating it from the current
-    /// worktree's `HEAD` when it doesn't exist yet.
-    func createWorktree(branch text: String) {
-        guard let repository = currentRepository else { return }
-        let branch = branchName(text)
-        let folder = repository.url.appending(path: ".worktrees/\(branch.replacingOccurrences(of: "/", with: "-"))")
-        let arguments = repository.branches.contains { $0.name == branch }
-            ? ["worktree", "add", folder.path, branch]
-            : ["worktree", "add", "-b", branch, folder.path]
-        runGit(arguments, in: currentWorktree.url, failure: "Couldn’t Create Worktree") {
-            try Self.excludeWorktreesFolder(in: repository)
-            return folder.standardizedFileURL.path
-        }
-    }
-
-    /// Creates `branch` from the current worktree's `HEAD` and switches that worktree to it.
-    func createBranch(_ text: String) {
-        runGit(["switch", "-c", branchName(text)], in: currentWorktree.url, failure: "Couldn’t Create Branch")
-    }
+    // MARK: Branches
 
     func checkOut(_ branch: Branch) {
         previewedBranch = nil
         runGit(["switch", branch.name], in: currentWorktree.url, failure: "Couldn’t Check Out \(branch.name)")
     }
 
-    /// Runs git, then re-reads the repositories and opens the worktree whose path `then` returns, if any.
-    private func runGit(_ arguments: [String], in directory: URL, failure: String, then: @escaping () throws -> String? = { nil }) {
+    /// Runs git, then re-reads the repositories.
+    private func runGit(_ arguments: [String], in directory: URL, failure: String) {
         Task {
             do {
                 try await Git.run(arguments, in: directory)
-                let path = try then()
                 reloadRepositories()
-                if let path, let worktree = worktrees.first(where: { $0.id == path }) { switchTo(worktree) }
             } catch {
                 reloadRepositories()
                 alert = Alert(title: failure, message: error.localizedDescription)
             }
         }
-    }
-
-    /// Keeps `.worktrees/` out of `git status` by listing it in `.git/info/exclude`, which isn't committed.
-    private static func excludeWorktreesFolder(in repository: Repository) throws {
-        let exclude = repository.url.appending(path: ".git/info/exclude")
-        let contents = (try? String(contentsOf: exclude, encoding: .utf8)) ?? ""
-        guard !contents.split(separator: "\n").contains(where: { $0 == "/.worktrees/" || $0 == ".worktrees/" || $0 == ".worktrees" }) else { return }
-        try FileManager.default.createDirectory(at: exclude.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let separator = contents.isEmpty || contents.hasSuffix("\n") ? "" : "\n"
-        try (contents + separator + "/.worktrees/\n").write(to: exclude, atomically: true, encoding: .utf8)
     }
 
     func toggleSidebar() {

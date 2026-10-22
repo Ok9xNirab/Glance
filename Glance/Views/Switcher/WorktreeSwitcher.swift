@@ -17,15 +17,11 @@ struct WorktreeSwitcher: View {
         /// `editedFile` is set when the worktree matched only because the agent is editing that file.
         case worktree(Worktree, editedFile: String?)
         case branch(Branch)
-        case newWorktree
-        case newBranch
 
         var id: String {
             switch self {
             case let .worktree(worktree, _): "worktree:\(worktree.id)"
             case let .branch(branch): "branch:\(branch.id)"
-            case .newWorktree: "new-worktree"
-            case .newBranch: "new-branch"
             }
         }
     }
@@ -42,7 +38,7 @@ struct WorktreeSwitcher: View {
     }
 
     private var panel: some View {
-        let entries = worktreeEntries + branchEntries + actionEntries
+        let entries = worktreeEntries + branchEntries
         return VStack(spacing: 0) {
             searchRow(entries)
             results(entries)
@@ -87,17 +83,6 @@ struct WorktreeSwitcher: View {
                     focusedIndex = max(focusedIndex - 1, 0)
                     return .handled
                 }
-                .onKeyPress(.return, phases: .down) { press in
-                    guard !query.isEmpty else { return .ignored }
-                    if press.modifiers == .option {
-                        activate(.newWorktree)
-                    } else if press.modifiers == .shift {
-                        activate(.newBranch)
-                    } else {
-                        return .ignored
-                    }
-                    return .handled
-                }
                 .onKeyPress(.escape) {
                     dismiss()
                     return .handled
@@ -111,7 +96,6 @@ struct WorktreeSwitcher: View {
 
     private func results(_ entries: [Entry]) -> some View {
         let worktreeCount = worktreeEntries.count
-        let branchCount = branchEntries.count
         return ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -125,12 +109,9 @@ struct WorktreeSwitcher: View {
                         if index == 0, worktreeCount > 0 {
                             GroupHeading(title: "Worktrees")
                         }
-                        if index == worktreeCount, branchCount > 0 {
+                        if index == worktreeCount {
                             GroupHeading(title: "Branches without a worktree")
                                 .padding(.top, worktreeCount > 0 ? 2 : 0)
-                        }
-                        if index == worktreeCount + branchCount {
-                            Hairline().padding(EdgeInsets(top: 8, leading: 8, bottom: 4, trailing: 8))
                         }
                         row(for: entry, isFocused: index == focusedIndex)
                             .id(entry.id)
@@ -157,10 +138,6 @@ struct WorktreeSwitcher: View {
             worktreeRow(worktree, editedFile: editedFile, isFocused: isFocused)
         case let .branch(branch):
             branchRow(branch, isFocused: isFocused)
-        case .newWorktree:
-            actionRow("New worktree from “\(query)”", systemImage: "plus", shortcut: "⌥↵", isFocused: isFocused, entry: entry)
-        case .newBranch:
-            actionRow("New branch “\(query)” in this worktree", systemImage: "arrow.triangle.branch", shortcut: "⇧↵", isFocused: isFocused, entry: entry)
         }
     }
 
@@ -235,38 +212,12 @@ struct WorktreeSwitcher: View {
                 model.checkOut(branch)
                 dismiss()
             }
-            Button("New Worktree") {
-                model.createWorktree(branch: branch.name)
-                dismiss()
-            }
         }
         .buttonStyle(BezelButtonStyle(height: 22))
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .frame(minHeight: 40)
         .background(RoundedRectangle(cornerRadius: 7).fill(isFocused ? Palette.hover : .clear))
-    }
-
-    private func actionRow(_ title: String, systemImage: String, shortcut: String, isFocused: Bool, entry: Entry) -> some View {
-        Button {
-            activate(entry)
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 13))
-                    .foregroundStyle(isFocused ? .white : Palette.secondaryText)
-                    .frame(width: 18)
-                Text(title)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                KeyCap(shortcut, inverted: isFocused)
-                    .foregroundStyle(isFocused ? .white : Palette.secondaryText)
-            }
-            .foregroundStyle(isFocused ? .white : Palette.text)
-            .padding(.horizontal, 10)
-            .frame(minHeight: 34)
-        }
-        .buttonStyle(RowButtonStyle(cornerRadius: 7, fill: isFocused ? accent : nil))
     }
 
     // MARK: Matching
@@ -291,10 +242,6 @@ struct WorktreeSwitcher: View {
         return model.branches.filter { !checkedOut.contains($0.name) && (query.isEmpty || matches($0.name)) }.map(Entry.branch)
     }
 
-    private var actionEntries: [Entry] {
-        query.isEmpty ? [] : [.newWorktree, .newBranch]
-    }
-
     private func matches(_ text: String) -> Bool {
         text.localizedCaseInsensitiveContains(query)
     }
@@ -314,8 +261,6 @@ struct WorktreeSwitcher: View {
         switch entry {
         case let .worktree(worktree, _): model.switchTo(worktree)
         case let .branch(branch): model.checkOut(branch)
-        case .newWorktree: model.createWorktree(branch: query)
-        case .newBranch: model.createBranch(query)
         }
         dismiss()
     }
