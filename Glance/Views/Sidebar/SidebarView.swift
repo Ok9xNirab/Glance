@@ -142,7 +142,7 @@ private struct WorktreeRow: View {
             model.switchTo(worktree)
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "folder")
+                Image(systemName: isCurrent ? "folder.fill" : "folder")
                     .font(.system(size: 13))
                     .foregroundStyle(accent)
                 VStack(alignment: .leading, spacing: 0) {
