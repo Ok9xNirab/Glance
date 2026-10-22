@@ -13,7 +13,7 @@ xcodebuild -project Glance.xcodeproj -scheme Glance -configuration Debug build
 
 ## Layout
 
-- `App/`: entry point, menu commands (⌘K, ⌘P, ⌘1–3, ⌘⇧C), Settings (appearance and accent).
+- `App/`: entry point, menu commands (⌘K, ⌘P, ⌘1–3, ⌘⇧C).
 - `Theme/`: `Palette` holds the design's light/dark color tokens; `glanceAccent` is an environment value.
 - `Models/`: plain value types (`FileDiff`, `Commit`, `Worktree`, `FileNode`). `RawHunk` lines use `+`/`-`/space prefixes.
 - `SampleData/`: all static content. Replace it with a git-backed source later.
