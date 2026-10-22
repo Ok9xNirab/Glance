@@ -15,7 +15,7 @@
 
 [**⬇ Download the DMG**](https://github.com/Ok9xNirab/Glance/releases/latest) · [Features](#features) · [Install](#installation) · [Build from source](#build-from-source)
 
-<img src="screenshot.png" alt="Glance on macOS showing a repository's worktrees in the sidebar, the list of changed files, and a syntax-highlighted diff" width="860">
+<img src="docs/screenshot.png" alt="Glance on macOS showing a repository's worktrees in the sidebar, the list of changed files, and a syntax-highlighted diff" width="860">
 
 </div>
 

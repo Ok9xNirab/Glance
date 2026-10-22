@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Glance: review what your agents changed</title>
+<meta name="description" content="Glance is a free, open-source native macOS git client for reviewing what Claude Code, Codex, Copilot and other coding agents change across every worktree.">
+<link rel="canonical" href="https://glance.nirab.me/">
+<link rel="icon" href="icon.png">
+<style>
+/* Layout: one left-aligned column (max 1180px) that reads like a diff, with gutter signs as the page's rhythm; the screenshot breaks out wide. Dark first. */
+:root {
+  --bg: #0F0F11;
+  --bg-raised: #161618;
+  --surface: #1E1E1F;
+  --surface-2: #252527;
+  --glass: rgba(34, 34, 38, .66);
+  --line: rgba(255, 255, 255, .09);
+  --fg: #ECECEE;
+  --fg-2: #A3A3A8;
+  --accent: #0A84FF;
+  --accent-btn: #0866D9;
+  --accent-btn-hover: #0A74F0;
+  --on-accent: #FFFFFF;
+  --add: #30D158;
+  --add-tx: #5BDB7E;
+  --add-bg: rgba(48, 209, 88, .13);
+  --add-gut: rgba(48, 209, 88, .21);
+  --del: #FF453A;
+  --del-tx: #FF7A70;
+  --del-bg: rgba(255, 69, 58, .14);
+  --del-gut: rgba(255, 69, 58, .23);
+  --agent: #D08CF5;
+  --agent-bg: rgba(191, 90, 242, .2);
+  --agent-dot: #BF5AF2;
+  --mod-tx: #FFB340;
+  --mod-bg: rgba(255, 159, 10, .2);
+  --code-bg: #19191A;
+  --key-top: #303034;
+  --key-bottom: #242427;
+  --key-edge: #08080A;
+  --key-hi: rgba(255, 255, 255, .08);
+  --shadow: rgba(0, 0, 0, .5);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --radius-window: 12px;
+  --radius-card: 18px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #F5F5F7; --bg-raised: #EDEDF0; --surface: #FFFFFF; --surface-2: #F3F3F5; --glass: rgba(255, 255, 255, .72);
+    --line: rgba(0, 0, 0, .1); --fg: #1D1D1F; --fg-2: #636368; --accent: #007AFF; --accent-btn: #0066D6; --accent-btn-hover: #0071EB;
+    --add: #34C759; --add-tx: #1B7A33; --add-bg: rgba(52, 199, 89, .12); --add-gut: rgba(52, 199, 89, .2);
+    --del: #FF3B30; --del-tx: #C1271D; --del-bg: rgba(255, 59, 48, .09); --del-gut: rgba(255, 59, 48, .16);
+    --agent: #8A35C2; --agent-bg: rgba(175, 82, 222, .13); --agent-dot: #AF52DE; --mod-tx: #9A5600; --mod-bg: rgba(255, 149, 0, .18);
+    --code-bg: #F3F3F5; --key-top: #FFFFFF; --key-bottom: #F2F2F4; --key-edge: #BDBDC3; --key-hi: rgba(255, 255, 255, .9); --shadow: rgba(30, 30, 40, .16);
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #F5F5F7; --bg-raised: #EDEDF0; --surface: #FFFFFF; --surface-2: #F3F3F5; --glass: rgba(255, 255, 255, .72);
+  --line: rgba(0, 0, 0, .1); --fg: #1D1D1F; --fg-2: #636368; --accent: #007AFF; --accent-btn: #0066D6; --accent-btn-hover: #0071EB;
+  --add: #34C759; --add-tx: #1B7A33; --add-bg: rgba(52, 199, 89, .12); --add-gut: rgba(52, 199, 89, .2);
+  --del: #FF3B30; --del-tx: #C1271D; --del-bg: rgba(255, 59, 48, .09); --del-gut: rgba(255, 59, 48, .16);
+  --agent: #8A35C2; --agent-bg: rgba(175, 82, 222, .13); --agent-dot: #AF52DE; --mod-tx: #9A5600; --mod-bg: rgba(255, 149, 0, .18);
+  --code-bg: #F3F3F5; --key-top: #FFFFFF; --key-bottom: #F2F2F4; --key-edge: #BDBDC3; --key-hi: rgba(255, 255, 255, .9); --shadow: rgba(30, 30, 40, .16);
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg); font: 400 16px/1.55 var(--sans);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+a { color: inherit; }
+img { max-width: 100%; display: block; }
+code, kbd, .mono { font-family: var(--mono); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+
+.wrap {
+  width: 100%; max-width: 1180px; margin: 0 auto;
+  padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px));
+}
+section { padding-block: clamp(72px, 10vw, 128px); }
+.label { font: 600 12px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--fg-2); display: inline-flex; align-items: center; gap: 10px; }
+.label .sign { color: var(--add-tx); }
+h2 { font: 680 clamp(32px, 4.6vw, 54px)/1.04 var(--display); letter-spacing: -.035em; margin: 14px 0 0; text-wrap: balance; max-width: 18ch; }
+.lede { color: var(--fg-2); font-size: clamp(17px, 1.6vw, 19px); max-width: 60ch; margin: 18px 0 0; text-wrap: pretty; }
+
+/* Nav */
+.nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; transition: background .25s, border-color .25s, backdrop-filter .25s; border-bottom: 1px solid transparent; }
+.nav .wrap { display: flex; align-items: center; gap: 22px; height: 64px; transition: height .25s; }
+.nav.scrolled { background: var(--glass); -webkit-backdrop-filter: saturate(1.6) blur(20px); backdrop-filter: saturate(1.6) blur(20px); border-bottom-color: var(--line); }
+.nav.scrolled .wrap { height: 52px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font: 650 17px/1 var(--display); letter-spacing: -.01em; margin-right: auto; }
+.brand img { width: 28px; height: 28px; }
+.nav-links { display: flex; align-items: center; gap: 22px; font-size: 14px; }
+.nav-links a:not(.btn) { color: var(--fg-2); text-decoration: none; }
+.nav-links a:not(.btn):hover { color: var(--fg); }
+.gh-link { display: inline-flex; align-items: center; gap: 7px; }
+.stars { font: 500 12px/1 var(--mono); padding: 3px 7px; border-radius: 20px; background: var(--surface-2); border: 1px solid var(--line); color: var(--fg); }
+@media (max-width: 640px) { .nav-links .hide-sm { display: none; } .nav-links { gap: 14px; } }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px; height: 44px; padding: 0 20px; border-radius: 11px;
+  font: 600 15px/1 var(--sans); text-decoration: none; border: 1px solid transparent; cursor: pointer; transition: background .15s, transform .15s, box-shadow .15s;
+}
+.btn-primary { background: var(--accent-btn); color: var(--on-accent); box-shadow: 0 1px 0 rgba(255,255,255,.18) inset, 0 6px 20px color-mix(in srgb, var(--accent) 30%, transparent); }
+.btn-primary:hover { background: var(--accent-btn-hover); transform: translateY(-1px); }
+.btn-secondary { background: var(--surface); color: var(--fg); border-color: var(--line); }
+.btn-secondary:hover { background: var(--surface-2); transform: translateY(-1px); }
+.btn-sm { height: 32px; padding: 0 13px; font-size: 13px; border-radius: 8px; }
+
+/* Hero */
+.hero { padding-block: clamp(40px, 7vw, 88px) 0; }
+.eyebrow { display: inline-flex; align-items: center; gap: 10px; font: 500 13px/1 var(--mono); color: var(--fg-2); padding: 8px 12px; border-radius: 30px; border: 1px solid var(--line); background: var(--surface); }
+.eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--agent-dot); box-shadow: 0 0 0 4px var(--agent-bg); }
+.diff-head { margin: 30px 0 0; display: flex; flex-direction: column; gap: 6px; font: 690 clamp(38px, 7.2vw, 92px)/1.02 var(--display); letter-spacing: -.045em; }
+.diff-head .row { display: inline-flex; align-items: baseline; gap: .32em; width: fit-content; max-width: 100%; padding: .06em .34em .1em .16em; border-radius: 10px; }
+.diff-head .sign { font: 500 .42em/1 var(--mono); letter-spacing: 0; width: 1em; text-align: center; transform: translateY(-.35em); flex: none; }
+.diff-head .del { background: var(--del-bg); color: var(--fg-2); font-size: .58em; font-weight: 600; letter-spacing: -.03em; }
+.diff-head .del .txt { text-decoration: line-through; text-decoration-color: var(--del); text-decoration-thickness: .07em; }
+.diff-head .del .sign { color: var(--del-tx); transform: translateY(-.15em); font-size: .6em; }
+.diff-head .add { background: var(--add-bg); }
+.diff-head .add .sign { color: var(--add-tx); }
+.diff-head .txt { text-wrap: balance; }
+.hero .sub { font-size: clamp(18px, 1.9vw, 21px); color: var(--fg-2); max-width: 56ch; margin: 26px 0 0; text-wrap: pretty; }
+.hero .sub strong { color: var(--fg); font-weight: 600; }
+.cta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 34px; }
+.cta-meta { display: block; font: 500 12px/1 var(--mono); color: var(--fg-2); margin-top: 10px; }
+.fine { margin: 14px 0 0; font-size: 13px; color: var(--fg-2); display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.fine span { display: inline-flex; align-items: center; gap: 6px; }
+.fine span::before { content: "+"; font-family: var(--mono); color: var(--add-tx); }
+
+.shot { position: relative; margin: clamp(48px, 7vw, 84px) auto 0; max-width: 1320px; padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); perspective: 1800px; }
+.shot::before {
+  content: ""; position: absolute; inset: 14% 8% 4%; z-index: 0; border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 30%, transparent), transparent),
+              radial-gradient(closest-side at 70% 60%, color-mix(in srgb, var(--agent-dot) 18%, transparent), transparent);
+  filter: blur(60px); opacity: .9;
+}
+.shot img { position: relative; z-index: 1; width: 100%; height: auto; transform-origin: 50% 0; transform: rotateX(var(--tilt, 0deg)) scale(var(--shrink, 1)); will-change: transform; }
+.shot figcaption { position: relative; z-index: 1; text-align: center; font-size: 13px; color: var(--fg-2); margin-top: 8px; }
+
+/* Workflow */
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 0; margin-top: 56px; border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; background: var(--surface); }
+.step { padding: 28px 26px 30px; display: flex; flex-direction: column; gap: 14px; min-width: 0; border-right: 1px solid var(--line); }
+.step:last-child { border-right: 0; }
+@media (max-width: 980px) { .step { border-right: 0; border-bottom: 1px solid var(--line); } .step:last-child { border-bottom: 0; } }
+.step-n { font: 600 12px/1 var(--mono); color: var(--fg-2); display: flex; align-items: center; gap: 10px; }
+.step-n b { display: inline-flex; width: 24px; height: 24px; border-radius: 7px; align-items: center; justify-content: center; background: var(--surface-2); color: var(--fg); border: 1px solid var(--line); font-weight: 600; }
+.step h3 { margin: 0; font: 650 22px/1.2 var(--display); letter-spacing: -.02em; }
+.step p { margin: 0; color: var(--fg-2); font-size: 15px; }
+.step .vis { margin-top: auto; padding-top: 6px; }
+.wt { display: flex; flex-direction: column; gap: 2px; padding: 8px; border-radius: 12px; background: var(--bg-raised); border: 1px solid var(--line); font-size: 13px; }
+.wt div { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 7px; }
+.wt div.on { background: var(--surface-2); }
+.wt .n { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.wt .n small { font: 11px var(--mono); color: var(--fg-2); }
+.wt .c { font: 500 11px var(--mono); padding: 1px 7px; border-radius: 9px; background: var(--surface-2); color: var(--fg-2); }
+.adot { width: 7px; height: 7px; border-radius: 50%; background: var(--agent-dot); flex: none; }
+.pulse { animation: pulse 1.8s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+.prompt { margin: 0; padding: 16px 16px 14px; background: var(--code-bg); border: 1px solid var(--line); border-radius: 12px; font: 12.5px/1.6 var(--mono); white-space: pre-wrap; word-break: break-word; color: var(--fg); }
+.prompt .p { color: var(--add-tx); }
+.prompt-btn { display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 10px; height: 32px; border-radius: 8px; background: var(--accent-btn); color: var(--on-accent); font: 600 13px/1 var(--sans); }
+
+/* Bento */
+.bento { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; margin-top: 56px; }
+.card { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 24px; display: flex; flex-direction: column; gap: 12px; min-width: 0; transition: transform .2s ease, box-shadow .2s ease; }
+.card:hover { transform: translateY(-3px); box-shadow: 0 18px 40px -18px var(--shadow); }
+.card h3 { margin: 0; font: 650 20px/1.2 var(--display); letter-spacing: -.02em; }
+.card p { margin: 0; color: var(--fg-2); font-size: 15px; }
+.card .tag { font: 600 11px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--fg-2); }
+.c-changes { grid-column: span 4; }
+.c-history { grid-column: span 2; }
+.c-files, .c-branches, .c-live { grid-column: span 2; }
+.c-windows, .c-git { grid-column: span 3; }
+.c-copy { grid-column: span 2; }
+.c-syntax { grid-column: span 4; }
+@media (max-width: 980px) {
+  .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .c-changes, .c-syntax { grid-column: span 2; }
+  .c-history, .c-files, .c-branches, .c-live, .c-windows, .c-git, .c-copy { grid-column: span 1; }
+}
+@media (max-width: 640px) { .bento { grid-template-columns: minmax(0, 1fr); } .bento > .card { grid-column: span 1; } }
+
+.diff { margin-top: 6px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--code-bg); font: 12.5px/20px var(--mono); }
+.diff-scroll { overflow-x: auto; }
+.diff .hh { padding: 5px 14px; color: var(--fg-2); background: color-mix(in srgb, var(--accent) 9%, var(--code-bg)); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 12px; }
+.diff .hh span:last-child { font-family: var(--sans); font-size: 12px; }
+.ln { display: grid; grid-template-columns: 38px 38px 20px max-content; min-width: 100%; }
+.ln .g { text-align: right; padding-right: 9px; color: var(--fg-2); user-select: none; }
+.ln .s { text-align: center; font-weight: 600; user-select: none; }
+.ln .t { white-space: pre; padding-right: 18px; }
+.ln.a { background: var(--add-bg); } .ln.a .g { background: var(--add-gut); } .ln.a .s { color: var(--add-tx); }
+.ln.d { background: var(--del-bg); } .ln.d .g { background: var(--del-gut); } .ln.d .s { color: var(--del-tx); }
+.kw { color: #FF7AB2; } .st { color: #FF8170; }
+:root[data-theme="light"] .kw { color: #9B2393; } :root[data-theme="light"] .st { color: #C41A16; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .kw { color: #9B2393; } :root:not([data-theme="dark"]) .st { color: #C41A16; } }
+
+.keys { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: 13px; color: var(--fg-2); }
+.keys span { display: inline-flex; align-items: center; gap: 6px; }
+
+.commits { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.commit { display: flex; flex-direction: column; gap: 4px; padding: 9px 10px; border-radius: 9px; }
+.commit.sel { background: var(--surface-2); }
+.commit .t { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.commit .m { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--fg-2); }
+.commit .sha { font: 11px var(--mono); margin-left: auto; }
+.chip-agent { font: 600 11px/17px var(--sans); padding: 0 7px; border-radius: 5px; background: var(--agent-bg); color: var(--agent); }
+.up { color: var(--fg-2); }
+.divider { display: flex; align-items: center; gap: 8px; font: 11px var(--mono); color: var(--fg-2); padding: 6px 10px; }
+.divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+.tree { margin-top: 4px; font-size: 13px; display: flex; flex-direction: column; gap: 1px; }
+.tree div { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 8px; border-radius: 6px; }
+.tree .in1 { padding-left: 24px; } .tree .in2 { padding-left: 40px; }
+.tree .sel { background: var(--surface-2); }
+.badge { font: 700 9.5px/1 var(--sans); width: 16px; height: 16px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; margin-left: auto; }
+.b-a { background: var(--add-bg); color: var(--add-tx); } .b-m { background: var(--mod-bg); color: var(--mod-tx); }
+.gutter-demo { display: grid; grid-template-columns: 3px 28px 1fr; font: 12px/19px var(--mono); margin-top: 4px; border-radius: 10px; overflow: hidden; background: var(--code-bg); border: 1px solid var(--line); }
+.gutter-demo span { white-space: pre; }
+.gutter-demo .mk-a { background: var(--add); } .gutter-demo .mk-m { background: #FF9F0A; }
+.gutter-demo .no { color: var(--fg-2); text-align: right; padding-right: 8px; }
+
+.mini-wins { position: relative; height: 140px; margin-top: 6px; }
+.mini-win { position: absolute; left: 0; right: 0; height: 92px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); box-shadow: 0 10px 24px -14px var(--shadow); padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+.mini-win:nth-child(1) { top: 0; left: 36px; right: 0; opacity: .55; }
+.mini-win:nth-child(2) { top: 22px; left: 18px; right: 18px; opacity: .8; }
+.mini-win:nth-child(3) { top: 44px; left: 0; right: 36px; background: var(--surface); }
+.mini-win .tl { display: flex; gap: 6px; } .mini-win .tl i { width: 9px; height: 9px; border-radius: 50%; display: block; background: var(--line); }
+.mini-win:nth-child(3) .tl i:nth-child(1) { background: #FF5F57; } .mini-win:nth-child(3) .tl i:nth-child(2) { background: #FEBC2E; } .mini-win:nth-child(3) .tl i:nth-child(3) { background: #28C840; }
+.mini-win .ttl { font: 12px var(--mono); color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-win .ttl b { color: var(--fg); font-weight: 600; }
+
+.term { margin-top: 6px; padding: 14px 16px; border-radius: 12px; background: var(--code-bg); border: 1px solid var(--line); font: 13px/1.7 var(--mono); overflow-x: auto; white-space: pre; }
+.term .p { color: var(--fg-2); } .term .ok { color: var(--add-tx); }
+.langs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.langs span { font: 500 13px/1 var(--mono); padding: 8px 11px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); }
+.live-row { display: flex; align-items: center; gap: 10px; font: 13px var(--mono); color: var(--agent); margin-top: 6px; padding: 10px 12px; border-radius: 10px; background: var(--agent-bg); }
+
+/* Principle */
+.principle { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: clamp(32px, 6vw, 80px); align-items: start; }
+@media (max-width: 900px) { .principle { grid-template-columns: minmax(0, 1fr); } }
+.p-diff { border-radius: var(--radius-card); border: 1px solid var(--line); background: var(--surface); overflow: hidden; font: 15px/1.5 var(--mono); }
+.p-diff .hh { padding: 12px 18px; font-size: 12px; color: var(--fg-2); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; }
+.p-line { display: grid; grid-template-columns: 44px minmax(0, 1fr); padding: 9px 18px 9px 0; }
+.p-line .s { text-align: center; font-weight: 600; }
+.p-line .x { display: flex; flex-direction: column; gap: 2px; }
+.p-line .x small { font: 13px/1.45 var(--sans); color: var(--fg-2); }
+.p-line.d { background: var(--del-bg); } .p-line.d .s { color: var(--del-tx); } .p-line.d code { text-decoration: line-through; text-decoration-color: var(--del); }
+.p-line.a { background: var(--add-bg); } .p-line.a .s { color: var(--add-tx); }
+.p-line + .p-line { border-top: 1px solid var(--line); }
+
+/* Shortcuts */
+.kgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr)); gap: 16px; margin-top: 56px; }
+.kgroup { border-radius: var(--radius-card); background: var(--surface); border: 1px solid var(--line); padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+.kgroup h3 { margin: 0; font: 600 12px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--fg-2); }
+.krow { display: flex; align-items: center; gap: 12px; font-size: 14.5px; }
+.krow .caps { display: flex; gap: 5px; flex: none; min-width: 92px; }
+.kbd {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 32px; padding: 0 8px; border-radius: 7px;
+  font: 500 14px/1 var(--sans); color: var(--fg); background: linear-gradient(var(--key-top), var(--key-bottom));
+  box-shadow: inset 0 1px 0 var(--key-hi), 0 0 0 .5px var(--key-edge), 0 3px 0 var(--key-edge), 0 4px 8px -2px var(--shadow);
+  transform: translateY(0); transition: transform .08s ease, box-shadow .08s ease; cursor: default; user-select: none;
+}
+.kbd:hover, .kbd:active { transform: translateY(2px); box-shadow: inset 0 1px 0 var(--key-hi), 0 0 0 .5px var(--key-edge), 0 1px 0 var(--key-edge), 0 1px 3px -1px var(--shadow); }
+.kbd.sm { min-width: 22px; height: 22px; font-size: 12px; padding: 0 5px; border-radius: 5px; box-shadow: inset 0 1px 0 var(--key-hi), 0 0 0 .5px var(--key-edge), 0 2px 0 var(--key-edge); }
+
+/* Install */
+.install { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; margin-top: 56px; }
+@media (max-width: 900px) { .install { grid-template-columns: minmax(0, 1fr); } }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); }
+.steps li { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 14px; padding: 20px 22px; }
+.steps li + li { border-top: 1px solid var(--line); }
+.steps .n { width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; background: var(--surface-2); border: 1px solid var(--line); font: 600 13px/1 var(--mono); }
+.steps b { font-weight: 600; }
+.steps p { margin: 4px 0 0; color: var(--fg-2); font-size: 15px; }
+.gate { border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+.gate h3 { margin: 0; font: 650 20px/1.25 var(--display); letter-spacing: -.02em; }
+.gate p { margin: 0; color: var(--fg-2); font-size: 15px; }
+.gate ol { margin: 0; padding-left: 20px; color: var(--fg-2); font-size: 15px; display: flex; flex-direction: column; gap: 6px; }
+.gate ol b { color: var(--fg); font-weight: 600; }
+.codebox { display: flex; align-items: stretch; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: var(--code-bg); }
+.codebox pre { margin: 0; flex: 1; min-width: 0; overflow-x: auto; padding: 13px 14px; font: 13px/1.5 var(--mono); }
+.codebox pre .p { color: var(--fg-2); user-select: none; }
+.copy { flex: none; border: 0; border-left: 1px solid var(--line); background: var(--surface-2); color: var(--fg); font: 600 12px/1 var(--sans); padding: 0 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; min-width: 84px; justify-content: center; }
+.copy:hover { background: var(--surface); }
+.copy.done { color: var(--add-tx); }
+.reqs { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 14px; color: var(--fg-2); margin-top: 18px; }
+.reqs code { font-size: 13px; color: var(--fg); }
+
+/* Open source */
+.oss { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: clamp(28px, 5vw, 64px); align-items: center; }
+@media (max-width: 900px) { .oss { grid-template-columns: minmax(0, 1fr); } }
+.oss-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+
+footer { border-top: 1px solid var(--line); padding-block: 28px 40px; font-size: 13px; color: var(--fg-2); }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+footer a { color: var(--fg-2); text-decoration: none; } footer a:hover { color: var(--fg); }
+footer .brand-sm { display: inline-flex; align-items: center; gap: 8px; color: var(--fg); font-weight: 600; margin-right: auto; }
+footer .brand-sm img { width: 20px; height: 20px; }
+
+.reveal { transition: opacity .6s ease, transform .6s ease; }
+.reveal.pending { opacity: .001; transform: translateY(16px); }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .reveal, .reveal.pending { opacity: 1; transform: none; transition: none; }
+  .shot img { transform: none !important; }
+  .pulse { animation: none; }
+  .card:hover, .btn:hover { transform: none; }
+  .kbd, .kbd:hover { transition: none; }
+}
+</style>
+<meta property="og:type" content="website">
+<meta property="og:title" content="Glance: review what your agents changed">
+<meta property="og:description" content="A free, open-source native macOS git client for reviewing what Claude Code, Codex, Copilot and other coding agents change across every worktree.">
+<meta property="og:url" content="https://glance.nirab.me/">
+<meta property="og:image" content="https://glance.nirab.me/screenshot.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0F0F11" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F5F5F7" media="(prefers-color-scheme: light)">
+</head>
+<body>
+<!--
+  Headline alternatives (the hero shows the first):
+  1. − Juggling terminals and git diff.  + Review what your agents changed.
+  2. − Scroll back through five terminals. + See every agent's changes in one window.
+  3. − git diff, git diff, git diff.      + Agents write. You review.
+-->
+
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Glance, back to top"><img src="icon.png" alt="" width="28" height="28">Glance</a>
+    <nav class="nav-links" aria-label="Main">
+      <a class="hide-sm" href="#features">Features</a>
+      <a class="hide-sm" href="#install">Install</a>
+      <a class="gh-link" href="https://github.com/Ok9xNirab/Glance">GitHub <span class="stars" id="stars" hidden></span></a>
+      <a class="btn btn-primary btn-sm" href="https://github.com/Ok9xNirab/Glance/releases/latest">Download</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <div class="hero">
+    <div class="wrap">
+      <span class="eyebrow"><span class="dot pulse" aria-hidden="true"></span>Free &amp; open source · macOS 26+</span>
+      <h1 class="diff-head" aria-label="Review what your agents changed.">
+        <span class="row del" aria-hidden="true"><span class="sign">−</span><span class="txt">Juggling terminals and git diff.</span></span>
+        <span class="row add" aria-hidden="true"><span class="sign">+</span><span class="txt">Review what your agents changed.</span></span>
+      </h1>
+      <p class="sub">Glance is a native Mac app that shows <strong>every repository, worktree and branch in one window</strong>. Read each agent's diff as it writes, mark files as viewed, throw away the bad hunks, and hand the rest back to the agent to commit.</p>
+      <div class="cta-row">
+        <div>
+          <a class="btn btn-primary" href="https://github.com/Ok9xNirab/Glance/releases/latest">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/></svg>
+            Download for Mac
+          </a>
+          <span class="cta-meta" id="release-meta">v1.0.0 · DMG</span>
+        </div>
+        <div>
+          <a class="btn btn-secondary" href="https://github.com/Ok9xNirab/Glance">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.08.63-1.33-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>
+            View on GitHub
+          </a>
+          <span class="cta-meta">MIT licensed · SwiftUI</span>
+        </div>
+      </div>
+      <p class="fine"><span>Apple Silicon &amp; Intel</span><span>No account</span><span>No tracking</span></p>
+    </div>
+    <figure class="shot" id="shot">
+      <img src="screenshot.png" width="3104" height="2024" alt="Glance on macOS: the sidebar lists the repository's worktrees, the middle column lists four changed files with two marked as viewed, and the right side shows a syntax-highlighted diff of README.md">
+    </figure>
+  </div>
+
+  <section id="workflow" aria-labelledby="wf-title">
+    <div class="wrap">
+      <span class="label"><span class="sign">@@</span>How it fits your day</span>
+      <h2 id="wf-title">Agents write. You review.</h2>
+      <p class="lede">Run several coding agents at once, each in its own worktree. Glance keeps up with all of them, so you stop jumping between terminals, <code>git diff</code> and your editor.</p>
+      <div class="flow reveal">
+        <article class="step">
+          <span class="step-n"><b>1</b>Agents work in worktrees</span>
+          <h3>Every worktree, in the sidebar</h3>
+          <p>Claude Code, Codex, Copilot or any other agent writes in its own git worktree. Glance finds each worktree and branch of the repository, and <span class="kbd sm">⌘K</span> jumps between them.</p>
+          <div class="vis">
+            <div class="wt" aria-label="Example sidebar">
+              <div><span class="n">storefront-api<small>main</small></span></div>
+              <div class="on"><span class="n">rate-limit<small>agent/rate-limit</small></span><span class="adot pulse" aria-hidden="true"></span><span class="c">7</span></div>
+              <div><span class="n">checkout-tests<small>agent/checkout-tests</small></span><span class="adot pulse" aria-hidden="true"></span><span class="c">3</span></div>
+            </div>
+          </div>
+        </article>
+        <article class="step">
+          <span class="step-n"><b>2</b>You review in Glance</span>
+          <h3>Read, mark, discard</h3>
+          <p>Changes appear as the agent writes files. Step through them with <span class="kbd sm">J</span> <span class="kbd sm">K</span>, mark each one viewed with <span class="kbd sm">V</span>, and discard a hunk or a whole file. <span class="kbd sm">⌘Z</span> brings it back.</p>
+          <div class="vis">
+            <div class="diff" aria-label="Example hunk">
+              <div class="hh"><span>@@ -8,3 +8,4 @@</span><span>Discard</span></div>
+              <div class="diff-scroll">
+                <div class="ln"><span class="g">8</span><span class="g">8</span><span class="s"></span><span class="t">app.use(express.json());</span></div>
+                <div class="ln d"><span class="g">9</span><span class="g"></span><span class="s">−</span><span class="t">app.use(throttle(100));</span></div>
+                <div class="ln a"><span class="g"></span><span class="g">9</span><span class="s">+</span><span class="t">app.use(rateLimit({ max: 100 }));</span></div>
+              </div>
+            </div>
+          </div>
+        </article>
+        <article class="step">
+          <span class="step-n"><b>3</b>The agent commits what you approved</span>
+          <h3>Hand it back with one prompt</h3>
+          <p>Glance doesn't commit. It copies a prompt that asks the agent to commit only the files you marked as viewed.</p>
+          <div class="vis">
+<pre class="prompt" aria-label="The commit prompt Glance copies">Commit only these files in /Users/you/dev/storefront-api, which I've reviewed:
+
+<span class="p">-</span> `src/middleware/rateLimit.ts`
+<span class="p">-</span> `src/server.ts`
+
+Leave every other change uncommitted, and write a commit message that describes these changes.</pre>
+            <div class="prompt-btn" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy Commit Prompt for 2 Files</div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" aria-labelledby="ft-title" style="padding-top: 0">
+    <div class="wrap">
+      <span class="label"><span class="sign">+</span>Features</span>
+      <h2 id="ft-title">Three views, one job: knowing what changed.</h2>
+      <div class="bento">
+        <article class="card c-changes reveal">
+          <span class="tag">Changes · ⌘1</span>
+          <h3>The worktree's uncommitted changes, as a diff you can act on</h3>
+          <p>Unified or split, syntax-highlighted, with hunk headers that stay pinned while you scroll. Discard a single hunk or several files at once (⌘/⇧-click), and push when the branch is ahead.</p>
+          <div class="diff" aria-label="Example diff">
+            <div class="hh"><span>src/server.ts · @@ -6,4 +6,7 @@</span><span>Unified · Split</span></div>
+            <div class="diff-scroll">
+              <div class="ln"><span class="g">6</span><span class="g">6</span><span class="s"></span><span class="t"><span class="kw">const</span> app = express();</span></div>
+              <div class="ln"><span class="g">7</span><span class="g">7</span><span class="s"></span><span class="t">app.use(express.json());</span></div>
+              <div class="ln d"><span class="g">8</span><span class="g"></span><span class="s">−</span><span class="t">app.use(throttle(<span class="st">100</span>));</span></div>
+              <div class="ln a"><span class="g"></span><span class="g">8</span><span class="s">+</span><span class="t">app.use(rateLimit({</span></div>
+              <div class="ln a"><span class="g"></span><span class="g">9</span><span class="s">+</span><span class="t">  windowMs: env.RATE_LIMIT_WINDOW_MS,</span></div>
+              <div class="ln a"><span class="g"></span><span class="g">10</span><span class="s">+</span><span class="t">}));</span></div>
+              <div class="ln"><span class="g">9</span><span class="g">11</span><span class="s"></span><span class="t">app.use(<span class="st">'/checkout'</span>, checkoutRouter);</span></div>
+            </div>
+          </div>
+          <div class="keys"><span><span class="kbd sm">⌥S</span> unified / split</span><span><span class="kbd sm">J</span><span class="kbd sm">K</span> next file</span><span><span class="kbd sm">V</span> viewed</span><span><span class="kbd sm">⌘Z</span> undo a discard</span></div>
+        </article>
+
+        <article class="card c-history reveal">
+          <span class="tag">History · ⌘2</span>
+          <h3>Who wrote it, and what isn't pushed</h3>
+          <p>The newest 500 commits. Glance names the agent from the <code>Co-authored-by</code> trailer and marks unpushed commits.</p>
+          <div class="commits" aria-label="Example commit list">
+            <div class="commit sel"><span class="t">Add per-IP rate limiting</span><span class="m"><span class="chip-agent">Claude</span>18 min<svg class="up" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Not pushed"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg><span class="sha">4e1c9a2</span></span></div>
+            <div class="commit"><span class="t">Extract price helpers</span><span class="m"><span class="chip-agent">Codex</span>41 min<svg class="up" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Not pushed"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg><span class="sha">b7d03f5</span></span></div>
+            <div class="divider">origin/main</div>
+            <div class="commit"><span class="t">Retry webhooks with backoff</span><span class="m">Yesterday<span class="sha">2f4b8c1</span></span></div>
+          </div>
+          <div class="keys"><span><span class="kbd sm">⌘C</span> copy SHA</span></div>
+        </article>
+
+        <article class="card c-files reveal">
+          <span class="tag">Files · ⌘3</span>
+          <h3>The whole tree, with change marks</h3>
+          <p>Tabs, change badges and gutter marks for added and modified lines.</p>
+          <div class="tree" aria-label="Example file tree">
+            <div>src</div>
+            <div class="in1">middleware</div>
+            <div class="in2 sel">rateLimit.ts<span class="badge b-a">A</span></div>
+            <div class="in1">server.ts<span class="badge b-m">M</span></div>
+          </div>
+          <div class="keys"><span><span class="kbd sm">⌘P</span> go to any file</span></div>
+        </article>
+
+        <article class="card c-branches reveal">
+          <span class="tag">Branches</span>
+          <h3>Preview a branch before you switch</h3>
+          <p>Click a branch in the sidebar to see its changes against the main branch and its history, read-only. Double-click to check it out.</p>
+          <div class="tree" aria-label="Example branch list">
+            <div class="sel"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 8v8"/><path d="M18 10c0 4-4 5-10 7"/></svg><span class="mono" style="font-size: 12.5px">feat/gift-cards</span><span class="badge" style="width: auto; padding: 0 6px; background: var(--surface); color: var(--fg-2); font-weight: 600">preview</span></div>
+            <div><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 8v8"/><path d="M18 10c0 4-4 5-10 7"/></svg><span class="mono" style="font-size: 12.5px">release/2.4</span></div>
+          </div>
+        </article>
+
+        <article class="card c-live reveal">
+          <span class="tag">Live</span>
+          <h3>No refresh button</h3>
+          <p>Glance watches each worktree with FSEvents and re-reads it when files, the index or <code>HEAD</code> change.</p>
+          <div class="live-row"><span class="adot pulse" aria-hidden="true"></span>rateLimit.ts changed</div>
+        </article>
+
+        <article class="card c-windows reveal">
+          <span class="tag">Windows</span>
+          <h3>One window per worktree</h3>
+          <p>Open any worktree in its own window with <span class="kbd sm">⌘N</span> or from the sidebar. Glance reopens your windows where you left them.</p>
+          <div class="mini-wins" aria-hidden="true">
+            <div class="mini-win"><div class="tl"><i></i><i></i><i></i></div><div class="ttl">storefront-api › main › main</div></div>
+            <div class="mini-win"><div class="tl"><i></i><i></i><i></i></div><div class="ttl">storefront-api › checkout-tests › agent/checkout-tests</div></div>
+            <div class="mini-win"><div class="tl"><i></i><i></i><i></i></div><div class="ttl"><b>storefront-api</b> › rate-limit › agent/rate-limit</div></div>
+          </div>
+        </article>
+
+        <article class="card c-git reveal">
+          <span class="tag">Your git</span>
+          <h3>Runs the git you already have</h3>
+          <p>Glance calls <code>/usr/bin/git</code> with your config, hooks and credentials. No account, no server, no tracking.</p>
+<div class="term" aria-label="Example"><span class="p">$</span> which git
+/usr/bin/git
+<span class="p">$</span> git config user.name
+<span class="ok">yours, as always</span></div>
+        </article>
+
+        <article class="card c-copy reveal">
+          <span class="tag">Hand-off</span>
+          <h3>Copy for Agent</h3>
+          <p><span class="kbd sm">⇧⌘C</span> copies the selected file's patch or commit, ready to paste into a prompt.</p>
+        </article>
+
+        <article class="card c-syntax reveal">
+          <span class="tag">Syntax</span>
+          <h3>Highlighted with tree-sitter</h3>
+          <div class="langs"><span>Swift</span><span>TypeScript</span><span>TSX</span><span>JavaScript</span><span>JSON</span><span>YAML</span><span>Markdown</span><span>Shell</span></div>
+          <p>Plus light and dark mode, your system accent colour, and repository avatars from GitHub, GitLab, Bitbucket and Gitea/Forgejo.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="principle" aria-labelledby="pr-title" style="background: var(--bg-raised); border-block: 1px solid var(--line)">
+    <div class="wrap principle">
+      <div>
+        <span class="label"><span class="sign">−</span>What Glance leaves alone</span>
+        <h2 id="pr-title">Agents stay in charge of git.</h2>
+        <p class="lede">Glance reads and reviews. Committing, syncing and merging stay with your agents and your command line, where they already work. There's no staging area: the commit prompt, not the index, decides what gets committed.</p>
+      </div>
+      <div class="p-diff reveal" role="list" aria-label="What Glance does and doesn't do">
+        <div class="hh"><span>glance/responsibilities</span><span>−5 +3</span></div>
+        <div class="p-line d" role="listitem"><span class="s">−</span><span class="x"><code>git commit</code><small>Your agent commits the files you approved.</small></span></div>
+        <div class="p-line d" role="listitem"><span class="s">−</span><span class="x"><span><code>git fetch</code> · <code>git pull</code></span><small>Sync from your agent or terminal.</small></span></div>
+        <div class="p-line d" role="listitem"><span class="s">−</span><span class="x"><code>git merge</code><small>Merge conflicts are the agent's to resolve.</small></span></div>
+        <div class="p-line d" role="listitem"><span class="s">−</span><span class="x"><code>git worktree add</code><small>Agents and CLIs create worktrees and branches; Glance picks them up.</small></span></div>
+        <div class="p-line d" role="listitem"><span class="s">−</span><span class="x"><code>git add</code><small>No staging. Mark files as viewed instead.</small></span></div>
+        <div class="p-line a" role="listitem"><span class="s">+</span><span class="x"><code>read every change</code><small>Across every repository, worktree and branch.</small></span></div>
+        <div class="p-line a" role="listitem"><span class="s">+</span><span class="x"><code>discard what's wrong</code><small>A hunk or a whole file, with undo.</small></span></div>
+        <div class="p-line a" role="listitem"><span class="s">+</span><span class="x"><code>git push</code><small>When the branch is ahead, and you say so.</small></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="shortcuts" aria-labelledby="ks-title">
+    <div class="wrap">
+      <span class="label"><span class="sign">+</span>Keyboard</span>
+      <h2 id="ks-title">Built to be driven from the keyboard.</h2>
+      <div class="kgrid">
+        <div class="kgroup">
+          <h3>Get around</h3>
+          <div class="krow"><span class="caps"><kbd class="kbd">⌘</kbd><kbd class="kbd">K</kbd></span>Switch worktree or branch</div>
+          <div class="krow"><span class="caps"><kbd class="kbd">⌘</kbd><kbd class="kbd">T</kbd></span>Switch repository</div>
+          <div class="krow"><span class="caps"><kbd class="kbd">⌘</kbd><kbd class="kbd">P</kbd></span>Go to file</div>
+          <div class="krow"><span class="caps"><kbd class="kbd">⌘</kbd><kbd class="kbd">1</kbd></span>Changes, History, Files (⌘1–3)</div>
+        </div>
+        <div class="kgroup">
+          <h3>Review</h3>
+          <div class="krow"><span class="caps"><kbd class="kbd">J</kbd><kbd class="kbd">K</kbd></span>Next and previous file</div>
+          <div class="krow"><span class="caps"><kbd class="kbd">V</kbd></span>Mark as viewed</div>
+          <div class="krow"><span class="caps"><kbd class="kbd">⌥</kbd><kbd class="kbd">S</kbd></span>Unified or split diff</div>
+          <div class="krow"><span class="caps"><kbd class="kbd">⌘</kbd><kbd class="kbd">Z</kbd></span>Undo a discard</div>
+        </div>
+        <div class="kgroup">
+          <h3>Hand off</h3>
+          <div class="krow"><span class="caps"><kbd class="kbd">⇧</kbd><kbd class="kbd">⌘</kbd><kbd class="kbd">C</kbd></span>Copy for Agent</div>
+          <div class="krow"><span class="caps"><kbd class="kbd">⌘</kbd><kbd class="kbd">C</kbd></span>Copy a commit's SHA</div>
+        </div>
+        <div class="kgroup">
+          <h3>Windows</h3>
+          <div class="krow"><span class="caps"><kbd class="kbd">⌘</kbd><kbd class="kbd">N</kbd></span>New window</div>
+          <div class="krow"><span class="caps"><kbd class="kbd">⌘</kbd><kbd class="kbd">O</kbd></span>Add a repository</div>
+          <div class="krow"><span class="caps"><kbd class="kbd">⌃</kbd><kbd class="kbd">⌘</kbd><kbd class="kbd">S</kbd></span>Show or hide the sidebar</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="install" aria-labelledby="in-title" style="padding-top: 0">
+    <div class="wrap">
+      <span class="label"><span class="sign">+</span>Install</span>
+      <h2 id="in-title">Two minutes, one extra click.</h2>
+      <p class="lede">Glance is free, so it isn't notarized by Apple (that needs a paid developer account). macOS will ask you to allow it the first time. The app isn't damaged, and every line of its source is on GitHub.</p>
+      <div class="install">
+        <ol class="steps">
+          <li><span class="n">1</span><div><b>Download the DMG</b><p>Get <code>Glance-&lt;version&gt;.dmg</code> from the <a href="https://github.com/Ok9xNirab/Glance/releases/latest">latest release</a>.</p></div></li>
+          <li><span class="n">2</span><div><b>Drag Glance into Applications</b><p>Open the DMG and drop the app onto the Applications folder.</p></div></li>
+          <li><span class="n">3</span><div><b>Open it, then allow it once</b><p>Open Glance from Applications. When macOS blocks it, follow the steps on the right. Then press <span class="kbd sm">⌘O</span> and choose a repository folder.</p></div></li>
+        </ol>
+        <div class="gate">
+          <h3>When macOS says “Glance” Not Opened</h3>
+          <ol>
+            <li>Click <b>Done</b> on the warning (not Move to Trash).</li>
+            <li>Open <b>System Settings › Privacy &amp; Security</b>.</li>
+            <li>Under Security, find “Glance” was blocked… and click <b>Open Anyway</b>.</li>
+            <li>Confirm with your password or Touch ID, then click <b>Open Anyway</b> again.</li>
+          </ol>
+          <p>Prefer Terminal? Remove the download quarantine flag instead. It also fixes “Glance is damaged and can't be opened”.</p>
+          <div class="codebox">
+            <pre id="xattr-cmd"><span class="p">$ </span>xattr -dr com.apple.quarantine /Applications/Glance.app</pre>
+            <button class="copy" type="button" data-copy="xattr -dr com.apple.quarantine /Applications/Glance.app" aria-label="Copy the command">Copy</button>
+          </div>
+          <p style="font-size: 13px">On macOS 15 and later, Control-click › Open no longer gets past this warning. Use Open Anyway.</p>
+        </div>
+      </div>
+      <div class="reqs"><span>macOS 26 (Tahoe) or later</span><span>Apple Silicon or Intel</span><span>git from the Command Line Tools: <code>xcode-select --install</code></span></div>
+    </div>
+  </section>
+
+  <section id="source" aria-labelledby="os-title" style="padding-top: 0">
+    <div class="wrap oss">
+      <div>
+        <span class="label"><span class="sign">+</span>Open source</span>
+        <h2 id="os-title">MIT licensed. Built with SwiftUI and tree-sitter.</h2>
+        <p class="lede">Read the code, file a bug, or send a pull request. For bigger changes, open an issue first so we can talk it through. If Glance helps you, a star on GitHub helps other people find it.</p>
+        <div class="oss-links">
+          <a class="btn btn-secondary" href="https://github.com/Ok9xNirab/Glance">Source code</a>
+          <a class="btn btn-secondary" href="https://github.com/Ok9xNirab/Glance/issues">Issues</a>
+          <a class="btn btn-secondary" href="https://github.com/Ok9xNirab/Glance/releases">Releases</a>
+        </div>
+      </div>
+      <div>
+        <div class="codebox">
+<pre><span class="p">$ </span>git clone https://github.com/Ok9xNirab/Glance.git
+<span class="p">$ </span>cd Glance
+<span class="p">$ </span>open Glance.xcodeproj</pre>
+          <button class="copy" type="button" data-copy="git clone https://github.com/Ok9xNirab/Glance.git&#10;cd Glance&#10;open Glance.xcodeproj" aria-label="Copy the build commands">Copy</button>
+        </div>
+        <p style="color: var(--fg-2); font-size: 14px; margin: 12px 0 0">Choose the Glance scheme and My Mac in Xcode 26, then press ⌘R.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="brand-sm"><img src="icon.png" alt="" width="20" height="20">Glance</span>
+    <span>© 2026 Istiaq Nirab</span>
+    <a href="https://github.com/Ok9xNirab/Glance/blob/main/LICENSE">MIT License</a>
+    <a href="https://github.com/Ok9xNirab/Glance">GitHub</a>
+    <a href="https://github.com/Ok9xNirab/Glance/releases">Releases</a>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var REPO = "Ok9xNirab/Glance";
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Sticky nav gets compact and translucent once the page scrolls.
+  var nav = document.getElementById("nav");
+  function onScroll() { nav.classList.toggle("scrolled", window.scrollY > 8); }
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  // Screenshot settles from a slight tilt as it scrolls into view.
+  var shot = document.getElementById("shot");
+  var img = shot && shot.querySelector("img");
+  if (img && !reduce) {
+    var ticking = false;
+    var update = function () {
+      ticking = false;
+      var r = shot.getBoundingClientRect();
+      var vh = window.innerHeight || 800;
+      var p = Math.min(1, Math.max(0, (vh - r.top) / (vh * 0.9)));
+      img.style.setProperty("--tilt", (12 * (1 - p)).toFixed(2) + "deg");
+      img.style.setProperty("--shrink", (0.96 + 0.04 * p).toFixed(3));
+    };
+    window.addEventListener("scroll", function () { if (!ticking) { ticking = true; requestAnimationFrame(update); } }, { passive: true });
+    window.addEventListener("resize", update);
+    update();
+  }
+
+  // Reveal: only elements below the first screen start hidden, so the page is complete at rest.
+  if (!reduce && "IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.remove("pending"); io.unobserve(e.target); } });
+    }, { rootMargin: "0px 0px -8% 0px" });
+    document.querySelectorAll(".reveal").forEach(function (el) {
+      if (el.getBoundingClientRect().top > window.innerHeight) { el.classList.add("pending"); io.observe(el); }
+    });
+  }
+
+  // Copy buttons.
+  document.querySelectorAll(".copy").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var text = btn.getAttribute("data-copy");
+      var done = function () { btn.textContent = "Copied"; btn.classList.add("done"); setTimeout(function () { btn.textContent = "Copy"; btn.classList.remove("done"); }, 1600); };
+      var fallback = function () {
+        var pre = btn.parentNode.querySelector("pre");
+        var range = document.createRange(); range.selectNodeContents(pre);
+        var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+        btn.textContent = "Press ⌘C";
+      };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+        else fallback();
+      } catch (e) { fallback(); }
+    });
+  });
+
+  // Live star count and release version, with quiet fallbacks.
+  function fmtStars(n) { return n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, "") + "k" : String(n); }
+  function fmtSize(b) { return b >= 1048576 ? (b / 1048576).toFixed(1).replace(/\.0$/, "") + " MB" : Math.round(b / 1024) + " KB"; }
+  try {
+    fetch("https://api.github.com/repos/" + REPO).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      if (d && typeof d.stargazers_count === "number" && d.stargazers_count > 0) {
+        var s = document.getElementById("stars");
+        s.textContent = "★ " + fmtStars(d.stargazers_count);
+        s.hidden = false;
+      }
+    }).catch(function () {});
+    fetch("https://api.github.com/repos/" + REPO + "/releases/latest").then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      if (!d || !d.tag_name) return;
+      var dmg = (d.assets || []).filter(function (a) { return /\.dmg$/i.test(a.name); })[0];
+      var v = d.tag_name.charAt(0) === "v" ? d.tag_name : "v" + d.tag_name;
+      document.getElementById("release-meta").textContent = v + (dmg ? " · " + fmtSize(dmg.size) : " · DMG");
+    }).catch(function () {});
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
