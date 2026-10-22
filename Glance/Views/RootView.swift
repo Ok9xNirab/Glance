@@ -57,6 +57,7 @@ struct RootView: View {
         .task {
             for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) {
                 model.reloadRepositories()
+                model.changes.refresh()
             }
         }
     }

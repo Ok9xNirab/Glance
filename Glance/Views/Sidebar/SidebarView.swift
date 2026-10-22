@@ -156,8 +156,9 @@ private struct WorktreeRow: View {
                 if worktree.isAgentActive {
                     AgentDot().help("Agent is writing files")
                 }
-                if !worktree.changes.isEmpty {
-                    CountBadge(count: worktree.changes.count)
+                let changeCount = model.changes(for: worktree).files.count
+                if changeCount > 0 {
+                    CountBadge(count: changeCount)
                 }
             }
             .padding(.horizontal, 10)

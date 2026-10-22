@@ -194,7 +194,7 @@ struct RepositoryPicker: View {
     private func repositoryRow(_ row: Row, isFocused: Bool) -> some View {
         let repository = row.repository
         let isCurrent = repository.id == model.currentRepository?.id
-        let changeCount = repository.worktrees.reduce(0) { $0 + $1.changes.count }
+        let changeCount = repository.worktrees.reduce(0) { $0 + model.changes(for: $1).files.count }
         let remote = model.remoteDetails.details(for: repository)
         let detail = row.group.kind == .recent ? repository.owner ?? "Local only"
             : repository.owner == nil ? "Local only · no remote"

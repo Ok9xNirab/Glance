@@ -40,7 +40,6 @@ struct Worktree: Identifiable {
     var isAgentActive = false
     var aheadCount = 0
     var behindCount = 0
-    var changes: [ChangedFile] = []
 
     var id: String { url.path }
     /// The folder, with the home folder abbreviated to "~".

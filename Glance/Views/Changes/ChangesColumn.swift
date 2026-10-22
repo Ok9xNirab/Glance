@@ -22,7 +22,9 @@ struct ChangesColumn: View {
             .padding(.top, 10)
             .padding(.bottom, 6)
 
-            if changes.files.isEmpty {
+            if !changes.isLoaded {
+                PaneMessage("")
+            } else if changes.files.isEmpty {
                 PaneMessage("No changes. The working tree is clean.")
             } else if changes.visibleFiles.isEmpty {
                 PaneMessage("No files match “\(changes.filter)”")

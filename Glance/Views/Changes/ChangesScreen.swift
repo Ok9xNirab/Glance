@@ -19,7 +19,7 @@ struct ChangesScreen: View {
 
 #Preview {
     let model = AppModel()
-    ChangesScreen(changes: model.changes)
+    ChangesScreen(changes: ChangesModel(files: SampleData.rateLimitChanges))
         .environment(model)
         .frame(width: 1220, height: 900)
 }

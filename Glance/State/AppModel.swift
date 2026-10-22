@@ -72,7 +72,8 @@ final class AppModel {
 
     func changes(for worktree: Worktree) -> ChangesModel {
         if let changes = changesByWorktree[worktree.id] { return changes }
-        let changes = ChangesModel(files: worktree.changes)
+        let changes = ChangesModel(url: worktree.url)
+        changes.onError = { [weak self] title, error in self?.alert = Alert(title: title, message: error.localizedDescription) }
         changesByWorktree[worktree.id] = changes
         return changes
     }
@@ -129,6 +130,7 @@ final class AppModel {
 
     func removeRepository(_ repository: Repository) {
         repositories.removeAll { $0.id == repository.id }
+        for worktree in repository.worktrees { changesByWorktree[worktree.id] = nil }
         RepositoryBookmarks.save(repositories.map(\.url))
         repository.url.stopAccessingSecurityScopedResource()
         recentRepositoryPaths.removeAll { $0 == repository.url.path }
@@ -138,9 +140,12 @@ final class AppModel {
         }
     }
 
-    /// Re-reads every repository, so worktrees and branches made outside Glance show up.
+    /// Re-reads every repository, so worktrees and branches made outside Glance show up, and stops watching
+    /// worktrees that are gone.
     func reloadRepositories() {
         repositories = repositories.map { (try? GitRepositoryReader.read($0.url)) ?? $0 }
+        let ids = Set(worktrees.map(\.id))
+        changesByWorktree = changesByWorktree.filter { ids.contains($0.key) }
         if !worktrees.contains(where: { $0.id == currentWorktreeID }) {
             currentWorktreeID = worktrees.first?.id
         }

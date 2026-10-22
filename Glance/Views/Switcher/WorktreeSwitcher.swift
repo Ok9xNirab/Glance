@@ -188,12 +188,13 @@ struct WorktreeSwitcher: View {
                 }
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                if !worktree.changes.isEmpty {
+                let changeCount = model.changes(for: worktree).files.count
+                if changeCount > 0 {
                     HStack(spacing: 6) {
                         if worktree.isAgentActive {
                             AgentDot(color: isFocused ? .white : Palette.agentDot)
                         }
-                        Text("\(worktree.changes.count) changes")
+                        Text("\(changeCount) \(changeCount == 1 ? "change" : "changes")")
                     }
                     .font(.system(size: 11))
                     .foregroundStyle(isFocused ? .white.opacity(0.85) : Palette.secondaryText)
@@ -278,7 +279,7 @@ struct WorktreeSwitcher: View {
         let direct = worktrees.filter { matches($0.name) || matches($0.branch) }
         let byFile: [Entry] = worktrees.compactMap { worktree in
             guard !direct.contains(where: { $0.id == worktree.id }),
-                  let file = worktree.changes.first(where: { matches($0.diff.name) })
+                  let file = model.changes(for: worktree).files.first(where: { matches($0.diff.name) })
             else { return nil }
             return .worktree(worktree, editedFile: file.diff.name)
         }
