@@ -9,6 +9,7 @@ import TreeSitterBash
 import TreeSitterJSON
 import TreeSitterJavaScript
 import TreeSitterMarkdown
+import TreeSitterPHP
 import TreeSitterSwift
 import TreeSitterTSX
 import TreeSitterTypeScript
@@ -23,6 +24,7 @@ enum SourceLanguage: String {
     case yaml = "YAML"
     case properties = "Properties"
     case shell = "Shell"
+    case php = "PHP"
     case swift = "Swift"
     case plainText = "Plain Text"
 
@@ -37,6 +39,7 @@ enum SourceLanguage: String {
         case "example", "env": self = .properties
         case "sh", "bash", "zsh": self = .shell
         case "swift": self = .swift
+        case "php", "phtml", "php3", "php4", "php5", "phps": self = .php
         default: self = .plainText
         }
     }
@@ -124,6 +127,7 @@ enum SyntaxHighlighter {
         case "none", "embedded": return .plain
         case "constant.builtin": return .keyword
         case "punctuation.special" where language == .markdown: return .keyword
+        case "tag" where language == .php: return .keyword
         default: break
         }
         switch capture.prefix(while: { $0 != "." }) {
@@ -175,6 +179,10 @@ enum SyntaxHighlighter {
         case .swift:
             pointer = tree_sitter_swift()
             queries = [("TreeSitterSwift_TreeSitterSwift", "highlights")]
+        case .php:
+            // The full grammar, which reads the HTML around `<?php` tags as text.
+            pointer = tree_sitter_php()
+            queries = [("TreeSitterPHP_TreeSitterPHP", "highlights")]
         case .plainText:
             return nil
         }
