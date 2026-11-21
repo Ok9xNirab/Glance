@@ -29,10 +29,10 @@ struct CodeView: NSViewRepresentable {
         textView.backgroundColor = NSColor(Palette.window)
         textView.textContainerInset = NSSize(width: 0, height: 8)
         textView.textContainer?.lineFragmentPadding = 0
-        textView.textContainer?.widthTracksTextView = false
-        // Lines don't wrap. A finite bound: TextKit fails to draw with CGFloat.greatestFiniteMagnitude.
-        textView.textContainer?.containerSize = NSSize(width: 1_000_000, height: 1_000_000_000)
-        textView.isHorizontallyResizable = true
+        // Lines wrap to the view's width. A finite height: TextKit fails to draw with CGFloat.greatestFiniteMagnitude.
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.containerSize = NSSize(width: 0, height: 1_000_000_000)
+        textView.isHorizontallyResizable = false
         textView.isVerticallyResizable = true
         textView.maxSize = NSSize(width: 1_000_000, height: 1_000_000_000)
         textView.autoresizingMask = [.width]
@@ -42,7 +42,7 @@ struct CodeView: NSViewRepresentable {
         scrollView.drawsBackground = true
         scrollView.backgroundColor = NSColor(Palette.window)
         scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = true
+        scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.automaticallyAdjustsContentInsets = false
         scrollView.documentView = textView
@@ -154,7 +154,7 @@ final class CodeTextView: NSTextView {
         }
         lineStarts = starts
 
-        // Every line gets the same fixed height, so the gutter can place numbers by arithmetic.
+        // Every row gets the same fixed height.
         let paragraph = NSMutableParagraphStyle()
         paragraph.minimumLineHeight = Self.lineHeight
         paragraph.maximumLineHeight = Self.lineHeight
@@ -197,8 +197,44 @@ final class CodeTextView: NSTextView {
         scrollToVisible(lineRect(line).insetBy(dx: 0, dy: -Self.lineHeight * 3))
     }
 
+    /// The 1-based line's rect in the view, covering every row it wraps onto.
     func lineRect(_ line: Int) -> NSRect {
-        NSRect(x: 0, y: textContainerOrigin.y + CGFloat(line - 1) * Self.lineHeight, width: bounds.width, height: Self.lineHeight)
+        let line = min(max(line, 1), lineStarts.count)
+        let origin = textContainerOrigin
+        let fallback = NSRect(x: 0, y: origin.y + CGFloat(line - 1) * Self.lineHeight, width: bounds.width, height: Self.lineHeight)
+        guard let layoutManager, let textContainer else { return fallback }
+        let length = (string as NSString).length
+        let start = lineStarts[line - 1]
+        let end = line < lineStarts.count ? lineStarts[line] : length
+        let glyphs = layoutManager.glyphRange(forCharacterRange: NSRange(location: start, length: max(0, end - start)), actualCharacterRange: nil)
+        var rect: NSRect
+        if glyphs.length > 0 {
+            rect = layoutManager.lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: nil)
+                .union(layoutManager.lineFragmentRect(forGlyphAt: NSMaxRange(glyphs) - 1, effectiveRange: nil))
+        } else {
+            // An empty last line: after the trailing newline, or the whole of an empty file.
+            layoutManager.ensureLayout(for: textContainer)
+            rect = layoutManager.extraLineFragmentRect
+            if rect.isEmpty {
+                guard line > 1 else { return fallback }
+                let previous = lineRect(line - 1)
+                return NSRect(x: 0, y: previous.maxY, width: bounds.width, height: Self.lineHeight)
+            }
+        }
+        return NSRect(x: 0, y: origin.y + rect.minY, width: bounds.width, height: rect.height)
+    }
+
+    /// The lines with a row inside `rect`, in the view's coordinates.
+    func lines(in rect: NSRect) -> ClosedRange<Int>? {
+        guard lineCount > 0, let layoutManager, let textContainer else { return nil }
+        let origin = textContainerOrigin
+        let containerRect = rect.offsetBy(dx: -origin.x, dy: -origin.y)
+        let glyphs = layoutManager.glyphRange(forBoundingRect: containerRect, in: textContainer)
+        let characters = layoutManager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+        let first = line(at: characters.location)
+        // Include the empty last line, which has no glyphs of its own.
+        let last = NSMaxRange(characters) >= (string as NSString).length ? lineCount : line(at: max(characters.location, NSMaxRange(characters) - 1))
+        return first...max(first, last)
     }
 
     override func drawBackground(in rect: NSRect) {
@@ -245,7 +281,7 @@ final class CodeTextView: NSTextView {
     }
 }
 
-/// Line numbers and change bars, drawn beside the text view so they stay put when it scrolls sideways.
+/// Line numbers and change bars, drawn beside the text view, one number per line however many rows it wraps onto.
 private final class LineNumberRuler: NSRulerView {
     private static let thickness: CGFloat = 49
 
@@ -263,6 +299,12 @@ private final class LineNumberRuler: NSRulerView {
         NotificationCenter.default.addObserver(
             self, selector: #selector(clipViewDidScroll),
             name: NSView.boundsDidChangeNotification, object: scrollView.contentView
+        )
+        // Resizing rewraps the lines, which moves their numbers.
+        textView.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(clipViewDidScroll),
+            name: NSView.frameDidChangeNotification, object: textView
         )
     }
 
@@ -284,22 +326,22 @@ private final class LineNumberRuler: NSRulerView {
         guard let textView else { return }
 
         let height = CodeTextView.lineHeight
-        let top = convert(NSPoint(x: 0, y: textView.textContainerOrigin.y), from: textView).y
-        let first = max(1, Int(((dirtyRect.minY - top) / height).rounded(.down)) + 1)
-        let last = min(textView.lineCount, Int(((dirtyRect.maxY - top) / height).rounded(.up)))
-        guard first <= last else { return }
+        let visible = textView.convert(dirtyRect, from: self)
+        guard let lines = textView.lines(in: NSRect(x: 0, y: visible.minY, width: textView.bounds.width, height: visible.height)) else { return }
 
         let selected = textView.selectedLines
         let showsCurrentLine = textView.selectedRange().length == 0
-        for line in first...last {
-            let rect = NSRect(x: 0, y: top + CGFloat(line - 1) * height, width: bounds.width, height: height)
+        for line in lines {
+            let lineRect = textView.lineRect(line)
+            let top = convert(NSPoint(x: 0, y: lineRect.minY), from: textView).y
+            let rect = NSRect(x: 0, y: top, width: bounds.width, height: lineRect.height)
             if showsCurrentLine, selected.contains(line) {
                 NSColor(Palette.currentLine).setFill()
                 rect.fill(using: .sourceOver)
             }
             if let mark = textView.marks[line] {
                 NSColor(mark.barColor).setFill()
-                NSRect(x: 0, y: rect.minY, width: 3, height: height).fill()
+                NSRect(x: 0, y: rect.minY, width: 3, height: rect.height).fill()
             }
             let number = "\(line)" as NSString
             let attributes: [NSAttributedString.Key: Any] = [
@@ -308,6 +350,7 @@ private final class LineNumberRuler: NSRulerView {
             ]
             let size = number.size(withAttributes: attributes)
             number.draw(
+                // On the line's first row, not centered across its wrapped rows.
                 at: NSPoint(x: rect.maxX - 14 - size.width, y: rect.minY + (height - size.height) / 2),
                 withAttributes: attributes
             )
