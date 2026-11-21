@@ -8,10 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		07FA89EC25F1AFD0CECABC3B /* TreeSitterTypeScript in Frameworks */ = {isa = PBXBuildFile; productRef = FABF04ADF911AC1FE06E80DF /* TreeSitterTypeScript */; };
-		A1B2C3D4E5F6A7B8C9D0E1F2 /* TreeSitterPHP in Frameworks */ = {isa = PBXBuildFile; productRef = B2C3D4E5F6A7B8C9D0E1F2A3 /* TreeSitterPHP */; };
 		727E59F2F4B9ED93B73CFB86 /* TreeSitterSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 9F9550CC5CB006D5BEF9DF73 /* TreeSitterSwift */; };
 		8A99497DAE2389015E3D010E /* SwiftTreeSitter in Frameworks */ = {isa = PBXBuildFile; productRef = 75DC353A99686D277F3665D2 /* SwiftTreeSitter */; };
 		8C89EDAC390F7DFDBA837A2E /* TreeSitterBash in Frameworks */ = {isa = PBXBuildFile; productRef = 72170E4CE6DB79909D882FD8 /* TreeSitterBash */; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* TreeSitterPHP in Frameworks */ = {isa = PBXBuildFile; productRef = B2C3D4E5F6A7B8C9D0E1F2A3 /* TreeSitterPHP */; };
 		A1DC1815B18F5365B6AC08B8 /* TreeSitterJavaScript in Frameworks */ = {isa = PBXBuildFile; productRef = 0E739E00A5B16B1B4FD0B058 /* TreeSitterJavaScript */; };
 		D1017D35115E9902792BCD1A /* TreeSitterMarkdown in Frameworks */ = {isa = PBXBuildFile; productRef = E04EDFE04E1D26B44D187FBE /* TreeSitterMarkdown */; };
 		D431F7A13A7C6686AB48B027 /* TreeSitterJSON in Frameworks */ = {isa = PBXBuildFile; productRef = 66265D249126AD924014690A /* TreeSitterJSON */; };
@@ -420,20 +420,20 @@
 				minimumVersion = 0.25.0;
 			};
 		};
-		CBC457293BD55E7A8334370F /* XCRemoteSwiftPackageReference "tree-sitter-json" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/tree-sitter/tree-sitter-json";
-			requirement = {
-				kind = exactVersion;
-				version = 0.24.8;
-			};
-		};
 		C3D4E5F6A7B8C9D0E1F2A3B4 /* XCRemoteSwiftPackageReference "tree-sitter-php" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/tree-sitter/tree-sitter-php";
 			requirement = {
 				kind = exactVersion;
 				version = 0.25.2;
+			};
+		};
+		CBC457293BD55E7A8334370F /* XCRemoteSwiftPackageReference "tree-sitter-json" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/tree-sitter/tree-sitter-json";
+			requirement = {
+				kind = exactVersion;
+				version = 0.24.8;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -469,6 +469,11 @@
 			package = 3727E2125EF2C1986748915F /* XCRemoteSwiftPackageReference "tree-sitter-swift" */;
 			productName = TreeSitterSwift;
 		};
+		B2C3D4E5F6A7B8C9D0E1F2A3 /* TreeSitterPHP */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C3D4E5F6A7B8C9D0E1F2A3B4 /* XCRemoteSwiftPackageReference "tree-sitter-php" */;
+			productName = TreeSitterPHP;
+		};
 		E04EDFE04E1D26B44D187FBE /* TreeSitterMarkdown */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 5B2FC1F5E4C369427882F11A /* XCRemoteSwiftPackageReference "tree-sitter-markdown" */;
@@ -478,11 +483,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 66925319A754801DD15E2BCD /* XCRemoteSwiftPackageReference "tree-sitter-typescript" */;
 			productName = TreeSitterTypeScript;
-		};
-		B2C3D4E5F6A7B8C9D0E1F2A3 /* TreeSitterPHP */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = C3D4E5F6A7B8C9D0E1F2A3B4 /* XCRemoteSwiftPackageReference "tree-sitter-php" */;
-			productName = TreeSitterPHP;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
