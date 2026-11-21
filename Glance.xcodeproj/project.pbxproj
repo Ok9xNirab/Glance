@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		07FA89EC25F1AFD0CECABC3B /* TreeSitterTypeScript in Frameworks */ = {isa = PBXBuildFile; productRef = FABF04ADF911AC1FE06E80DF /* TreeSitterTypeScript */; };
+		5A9C1E2B7D3F4A6B8C0D1E2F /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 6B0D2F3C8E4A5B7C9D1E2F3A /* Sparkle */; };
 		727E59F2F4B9ED93B73CFB86 /* TreeSitterSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 9F9550CC5CB006D5BEF9DF73 /* TreeSitterSwift */; };
 		8A99497DAE2389015E3D010E /* SwiftTreeSitter in Frameworks */ = {isa = PBXBuildFile; productRef = 75DC353A99686D277F3665D2 /* SwiftTreeSitter */; };
 		8C89EDAC390F7DFDBA837A2E /* TreeSitterBash in Frameworks */ = {isa = PBXBuildFile; productRef = 72170E4CE6DB79909D882FD8 /* TreeSitterBash */; };
@@ -43,6 +44,7 @@
 				D1017D35115E9902792BCD1A /* TreeSitterMarkdown in Frameworks */,
 				727E59F2F4B9ED93B73CFB86 /* TreeSitterSwift in Frameworks */,
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* TreeSitterPHP in Frameworks */,
+				5A9C1E2B7D3F4A6B8C0D1E2F /* Sparkle in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -91,6 +93,7 @@
 				E04EDFE04E1D26B44D187FBE /* TreeSitterMarkdown */,
 				9F9550CC5CB006D5BEF9DF73 /* TreeSitterSwift */,
 				B2C3D4E5F6A7B8C9D0E1F2A3 /* TreeSitterPHP */,
+				6B0D2F3C8E4A5B7C9D1E2F3A /* Sparkle */,
 			);
 			productName = Glance;
 			productReference = 34C7D4E13089988300E75A2C /* Glance.app */;
@@ -130,6 +133,7 @@
 				5B2FC1F5E4C369427882F11A /* XCRemoteSwiftPackageReference "tree-sitter-markdown" */,
 				3727E2125EF2C1986748915F /* XCRemoteSwiftPackageReference "tree-sitter-swift" */,
 				C3D4E5F6A7B8C9D0E1F2A3B4 /* XCRemoteSwiftPackageReference "tree-sitter-php" */,
+				7C1E3A4D9F5B6C8D0E2F3A4B /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 34C7D4E23089988300E75A2C /* Products */;
@@ -292,6 +296,7 @@
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2026 Istiaq Nirab. MIT License.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -324,6 +329,7 @@
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2026 Istiaq Nirab. MIT License.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -404,6 +410,14 @@
 				version = 0.25.1;
 			};
 		};
+		7C1E3A4D9F5B6C8D0E2F3A4B /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.10.1;
+			};
+		};
 		8DF82D5037B7D478CBC592C3 /* XCRemoteSwiftPackageReference "tree-sitter-javascript" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/tree-sitter/tree-sitter-javascript";
@@ -453,6 +467,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = CBC457293BD55E7A8334370F /* XCRemoteSwiftPackageReference "tree-sitter-json" */;
 			productName = TreeSitterJSON;
+		};
+		6B0D2F3C8E4A5B7C9D1E2F3A /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7C1E3A4D9F5B6C8D0E2F3A4B /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 		72170E4CE6DB79909D882FD8 /* TreeSitterBash */ = {
 			isa = XCSwiftPackageProductDependency;

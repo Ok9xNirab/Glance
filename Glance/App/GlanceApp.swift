@@ -11,6 +11,11 @@ import SwiftUI
 struct GlanceApp: App {
     @State private var library = RepositoryLibrary()
 
+    init() {
+        // Starts Sparkle, which checks for updates in the background.
+        _ = Updater.shared
+    }
+
     var body: some Scene {
         WindowGroup(id: GlanceWindow.id, for: String.self) { $worktreePath in
             GlanceWindow(library: library, worktreePath: $worktreePath)

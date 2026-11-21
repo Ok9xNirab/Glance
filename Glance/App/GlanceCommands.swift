@@ -13,6 +13,7 @@ struct GlanceCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .appInfo) {
             AboutCommand()
+            CheckForUpdatesCommand()
         }
 
         // ⌘P is "Go to File…" here, not Print.
