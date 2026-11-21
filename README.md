@@ -35,7 +35,7 @@ When you run several coding agents at once, each in its own git worktree, keepin
 | --- | --- |
 | 📝 **Changes** | The worktree's uncommitted changes as a unified or split diff (<kbd>⌥S</kbd>), syntax-highlighted. Step through files with <kbd>J</kbd>/<kbd>K</kbd> and mark them as viewed with <kbd>V</kbd>. Discard a single hunk or whole files (⌘/⇧-click to select several), and undo a discard with <kbd>⌘Z</kbd>. **Copy a commit prompt** that asks the agent to commit only the files you marked as viewed. Push when the branch is ahead. |
 | 🕘 **History** | The newest 500 commits, with unpushed commits marked and the agent named from its `Co-authored-by` trailer (Claude, Codex, Copilot…). Select a commit to read its diff; <kbd>⌘C</kbd> copies its SHA. |
-| 📁 **Files** | The worktree's file tree with tabs, change badges and gutter marks for added and modified lines. <kbd>⌘P</kbd> goes to any file. |
+| 📁 **Files** | The worktree's file tree with tabs, change badges and gutter marks for added and modified lines. Long lines wrap, a minimap scrolls the file, and Markdown files render as a preview with a switch to the source. <kbd>⌘P</kbd> goes to any file. |
 | 🌿 **Branches** | Click a branch in the sidebar to preview its changes against the main branch and its history, read-only. Double-click to check it out. |
 
 ### Built for speed
@@ -44,8 +44,9 @@ When you run several coding agents at once, each in its own git worktree, keepin
 - **Copy for Agent** (<kbd>⇧⌘C</kbd>) copies the selected file's patch or commit, ready to paste into an agent's prompt.
 - **One window per worktree**: open a worktree in its own window, and Glance reopens your windows where you left them.
 - **Shortcuts**: <kbd>⌘1</kbd>–<kbd>⌘3</kbd> Changes, History and Files, <kbd>⌘N</kbd> new window, <kbd>⌘O</kbd> add a repository, <kbd>⌃⌘S</kbd> show or hide the sidebar.
+- **Keeps itself up to date**: signed and notarized by Apple, and updates install from inside the app (**Glance › Check for Updates…**).
 - **Looks at home on macOS**: light and dark mode, your system accent colour, and repository avatars from GitHub, GitLab, Bitbucket and Gitea/Forgejo.
-- **Syntax highlighting** with [tree-sitter](https://tree-sitter.github.io) for Swift, TypeScript, TSX, JavaScript, JSON, YAML, Markdown and shell scripts.
+- **Syntax highlighting** with [tree-sitter](https://tree-sitter.github.io) for Swift, TypeScript, TSX, JavaScript, JSON, YAML, Markdown, PHP and shell scripts.
 
 ## Requirements
 
@@ -106,10 +107,10 @@ scripts/make-dmg.sh Builds the release DMG
 
 - [x] Changes with hunk and file discards, undo and viewed files
 - [x] History with agent attribution and unpushed commits
-- [x] Files with change marks
+- [x] Files with change marks, line wrapping, a minimap and Markdown preview
 - [x] Branch previews and multiple windows
-- [ ] Update check against GitHub releases
-- [ ] Developer ID signing and notarization
+- [x] Automatic updates with Sparkle
+- [x] Developer ID signing and notarization
 
 ## Contributing
 
