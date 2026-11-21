@@ -77,14 +77,15 @@ private struct FileTreeRow: View {
             }
         } label: {
             HStack(spacing: 5) {
-                Group {
-                    if node.isFolder {
-                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
-                    }
+                // Files keep the chevron's column, so their icons line up with folders'.
+                if node.isFolder {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(isSelected ? .white.opacity(0.85) : Palette.secondaryText)
+                        .frame(width: 12)
+                } else {
+                    Color.clear.frame(width: 12, height: 1)
                 }
-                .foregroundStyle(isSelected ? .white.opacity(0.85) : Palette.secondaryText)
-                .frame(width: 12)
 
                 if node.isFolder {
                     Image(systemName: "folder")
