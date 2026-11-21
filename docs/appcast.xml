@@ -1,0 +1,15 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Glance</title>
+        <item>
+            <title>1.1.0</title>
+            <pubDate>Sun, 22 Nov 2026 01:52:19 +0600</pubDate>
+            <link>https://glance.nirab.me</link>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.6</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/Ok9xNirab/Glance/releases/download/v1.1.0/Glance-1.1.0.dmg" length="9384214" type="application/octet-stream" sparkle:edSignature="iNmCC/wubKfHkizMCsJe0WQpthVpa9VWrWi2DzHBYR/p7zh2BZVhF4vKqkg/15m6GKeAqeNk49WX2oTWzJftAg=="/>
+        </item>
+    </channel>
+</rss>

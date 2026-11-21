@@ -58,36 +58,12 @@ When you run several coding agents at once, each in its own git worktree, keepin
 
 1. Download **`Glance-<version>.dmg`** from the [latest release](https://github.com/Ok9xNirab/Glance/releases/latest).
 2. Open the DMG and drag **Glance** onto the **Applications** folder.
-3. Open Glance from Applications. The first time, macOS will block it. Follow [Opening Glance for the first time](#opening-glance-for-the-first-time).
+3. Open Glance from Applications. It's signed with a Developer ID and notarized by Apple, so it opens without a warning.
 4. Press <kbd>⌘O</kbd> and choose a repository folder.
-
-### Opening Glance for the first time
-
-Glance is free and open source, and it isn't notarized by Apple (that needs a paid developer account). So the first time you open it, macOS shows:
-
-> "Glance" Not Opened. Apple could not verify "Glance" is free of malware that may harm your Mac or compromise your privacy.
-
-The app isn't damaged, and you can read every line of its source here. Allow it once:
-
-1. Click **Done** on the warning (not *Move to Trash*).
-2. Open **System Settings › Privacy & Security**.
-3. Scroll down to **Security**, find *"Glance" was blocked…* and click **Open Anyway**.
-4. Confirm with your password or Touch ID, then click **Open Anyway** again.
-
-> [!TIP]
-> On macOS 15 and later, Control-clicking the app and choosing **Open** no longer gets past this warning. Use **Open Anyway** in System Settings.
-
-**Prefer Terminal?** Remove the download quarantine flag instead:
-
-```sh
-xattr -dr com.apple.quarantine /Applications/Glance.app
-```
-
-The same command fixes the *"Glance is damaged and can't be opened"* message.
 
 ### Updating and uninstalling
 
-- **Update**: download the new DMG from [Releases](https://github.com/Ok9xNirab/Glance/releases), quit Glance, and drag the new version into Applications to replace the old one. You may need to allow it once more.
+- **Update**: Glance checks for new versions in the background (with [Sparkle](https://sparkle-project.org)) and offers to install them; **Glance › Check for Updates…** checks right away. Version 1.0.0 can't update itself, so download 1.1 or later once from [Releases](https://github.com/Ok9xNirab/Glance/releases).
 - **Uninstall**: move `Glance.app` to the Trash. To also delete its settings and avatar cache, run `defaults delete com.ok9xnirab.Glance; rm -rf ~/Library/Caches/com.ok9xnirab.Glance`. Your repositories aren't touched.
 
 ## Build from source

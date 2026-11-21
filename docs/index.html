@@ -591,28 +591,18 @@ Leave every other change uncommitted, and write a commit message that describes 
   <section id="install" aria-labelledby="in-title" style="padding-top: 0">
     <div class="wrap">
       <span class="label"><span class="sign">+</span>Install</span>
-      <h2 id="in-title">Two minutes, one extra click.</h2>
-      <p class="lede">Glance is free, so it isn't notarized by Apple (that needs a paid developer account). macOS will ask you to allow it the first time. The app isn't damaged, and every line of its source is on GitHub.</p>
+      <h2 id="in-title">Download, drag, open.</h2>
+      <p class="lede">Glance is signed with a Developer ID and notarized by Apple, so it opens like any other app. Every line of its source is on GitHub.</p>
       <div class="install">
         <ol class="steps">
           <li><span class="n">1</span><div><b>Download the DMG</b><p>Get <code>Glance-&lt;version&gt;.dmg</code> from the <a href="https://github.com/Ok9xNirab/Glance/releases/latest">latest release</a>.</p></div></li>
           <li><span class="n">2</span><div><b>Drag Glance into Applications</b><p>Open the DMG and drop the app onto the Applications folder.</p></div></li>
-          <li><span class="n">3</span><div><b>Open it, then allow it once</b><p>Open Glance from Applications. When macOS blocks it, follow the steps on the right. Then press <span class="kbd sm">⌘O</span> and choose a repository folder.</p></div></li>
+          <li><span class="n">3</span><div><b>Open it and add a repository</b><p>Open Glance from Applications, then press <span class="kbd sm">⌘O</span> and choose a repository folder.</p></div></li>
         </ol>
         <div class="gate">
-          <h3>When macOS says “Glance” Not Opened</h3>
-          <ol>
-            <li>Click <b>Done</b> on the warning (not Move to Trash).</li>
-            <li>Open <b>System Settings › Privacy &amp; Security</b>.</li>
-            <li>Under Security, find “Glance” was blocked… and click <b>Open Anyway</b>.</li>
-            <li>Confirm with your password or Touch ID, then click <b>Open Anyway</b> again.</li>
-          </ol>
-          <p>Prefer Terminal? Remove the download quarantine flag instead. It also fixes “Glance is damaged and can't be opened”.</p>
-          <div class="codebox">
-            <pre id="xattr-cmd"><span class="p">$ </span>xattr -dr com.apple.quarantine /Applications/Glance.app</pre>
-            <button class="copy" type="button" data-copy="xattr -dr com.apple.quarantine /Applications/Glance.app" aria-label="Copy the command">Copy</button>
-          </div>
-          <p style="font-size: 13px">On macOS 15 and later, Control-click › Open no longer gets past this warning. Use Open Anyway.</p>
+          <h3>Stays up to date</h3>
+          <p>Glance checks for new versions in the background and offers to install them. Each update is signed, so only releases from this project are accepted. You can also check any time with <b>Glance › Check for Updates…</b></p>
+          <p style="font-size: 13px">Coming from 1.0.0? That version can't update itself. Download 1.1 once, and updates are automatic from then on.</p>
         </div>
       </div>
       <div class="reqs"><span>macOS 26 (Tahoe) or later</span><span>Apple Silicon or Intel</span><span>git from the Command Line Tools: <code>xcode-select --install</code></span></div>
