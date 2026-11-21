@@ -232,34 +232,47 @@ private struct MarkdownTable: View {
     let header: [AttributedString]
     let rows: [[AttributedString]]
 
+    /// The reader's width, which the columns share; a table whose words alone don't fit scrolls sideways.
+    @State private var width: CGFloat?
+
     var body: some View {
+        let allRows = header.isEmpty ? rows : [header] + rows
         ScrollView(.horizontal, showsIndicators: false) {
-            Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
-                if !header.isEmpty {
-                    row(header, isHeader: true, background: Palette.column)
-                }
-                ForEach(rows.indices, id: \.self) { index in
-                    row(rows[index], isHeader: false, background: index.isMultiple(of: 2) ? Palette.window : Palette.column)
-                }
-            }
-            .overlay(Rectangle().strokeBorder(Palette.separator, lineWidth: 1))
+            table(allRows)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     }
 
-    private func row(_ cells: [AttributedString], isHeader: Bool, background: Color) -> some View {
-        GridRow {
-            ForEach(cells.indices, id: \.self) { column in
-                Text(cells[column])
-                    .fontWeight(isHeader ? .semibold : .regular)
-                    .frame(maxWidth: 420, alignment: alignment(column))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment(column))
-                    .background(background)
-                    .overlay(Rectangle().strokeBorder(Palette.separator, lineWidth: 0.5))
+    private func table(_ allRows: [[AttributedString]]) -> some View {
+        TableLayout(columns: columns.count, width: width) {
+            ForEach(allRows.indices, id: \.self) { index in
+                let isHeader = !header.isEmpty && index == 0
+                let stripe = (header.isEmpty ? index : index - 1).isMultiple(of: 2)
+                ForEach(allRows[index].indices, id: \.self) { column in
+                    Text(allRows[index][column])
+                        .fontWeight(isHeader ? .semibold : .regular)
+                        .lineSpacing(3)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment(column))
+                        .background(isHeader || !stripe ? Palette.column : Palette.window)
+                        .overlay(Rectangle().strokeBorder(Palette.separator, lineWidth: 0.5))
+                        .layoutValue(key: MinimumCellWidth.self, value: Self.minimumWidth(of: allRows[index][column]))
+                }
             }
         }
+        .overlay(Rectangle().strokeBorder(Palette.separator, lineWidth: 1))
+    }
+
+    /// The cell's longest word plus its padding, so columns are never narrower than a word. Long words such as
+    /// URLs count as 200 points and wrap past that.
+    private static func minimumWidth(of text: AttributedString) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: 14, weight: .semibold)
+        let longest = String(text.characters)
+            .split(whereSeparator: \.isWhitespace)
+            .map { NSAttributedString(string: String($0), attributes: [.font: font]).size().width }
+            .max() ?? 0
+        return ceil(min(longest, 200)) + 24
     }
 
     private func alignment(_ column: Int) -> Alignment {
@@ -268,6 +281,70 @@ private struct MarkdownTable: View {
         case .center: .center
         case .trailing: .trailing
         }
+    }
+}
+
+private struct MinimumCellWidth: LayoutValueKey {
+    static let defaultValue: CGFloat = 0
+}
+
+/// Lays out a table's cells, given in row order, the way browsers size an automatic table: each column gets at
+/// least its longest word and at most its unwrapped width, and the room in between is shared in proportion.
+/// Each row is as tall as its tallest cell.
+private struct TableLayout: Layout {
+    let columns: Int
+    /// The width to fit into, or `nil` to use the columns' unwrapped widths.
+    let width: CGFloat?
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let (widths, heights) = measure(subviews)
+        return CGSize(width: widths.reduce(0, +), height: heights.reduce(0, +))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let (widths, heights) = measure(subviews)
+        var y = bounds.minY
+        for (row, height) in heights.enumerated() {
+            var x = bounds.minX
+            for column in 0..<columns {
+                let index = row * columns + column
+                guard subviews.indices.contains(index) else { break }
+                subviews[index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(width: widths[column], height: height))
+                x += widths[column]
+            }
+            y += height
+        }
+    }
+
+    private func measure(_ subviews: Subviews) -> (widths: [CGFloat], heights: [CGFloat]) {
+        guard columns > 0 else { return ([], []) }
+        var minimum = Array(repeating: CGFloat(0), count: columns)
+        var maximum = minimum
+        for (index, subview) in subviews.enumerated() {
+            let column = index % columns
+            minimum[column] = max(minimum[column], subview[MinimumCellWidth.self])
+            maximum[column] = max(maximum[column], ceil(subview.sizeThatFits(.unspecified).width))
+        }
+        maximum = zip(minimum, maximum).map { max($0, $1) }
+        let widths = Self.fit(minimum: minimum, maximum: maximum, into: width)
+        let rowCount = (subviews.count + columns - 1) / columns
+        let heights = (0..<rowCount).map { row in
+            (0..<columns).reduce(CGFloat(0)) { tallest, column in
+                let index = row * columns + column
+                guard subviews.indices.contains(index) else { return tallest }
+                return max(tallest, ceil(subviews[index].sizeThatFits(ProposedViewSize(width: widths[column], height: nil)).height))
+            }
+        }
+        return (widths, heights)
+    }
+
+    private static func fit(minimum: [CGFloat], maximum: [CGFloat], into width: CGFloat?) -> [CGFloat] {
+        let least = minimum.reduce(0, +)
+        let most = maximum.reduce(0, +)
+        guard let width, width < most else { return maximum }
+        guard width > least, most > least else { return minimum }
+        let share = (width - least) / (most - least)
+        return zip(minimum, maximum).map { floor($0 + ($1 - $0) * share) }
     }
 }
 
