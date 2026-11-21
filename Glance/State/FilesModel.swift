@@ -47,6 +47,8 @@ final class FilesModel {
     /// The lines the editor's selection touches; a bare caret selects just its own line.
     var selectedLines = 1...1
     var currentColumn = 1
+    /// Markdown files switched to their source; the rest show rendered, and reopening one renders it again.
+    var sourcePaths: Set<String> = []
     var query = ""
     var changedOnly = false
     /// Set by ⌘P; the file list focuses its search field and clears this.
@@ -210,6 +212,19 @@ final class FilesModel {
         return marks
     }
 
+    func isMarkdown(_ path: String) -> Bool {
+        SourceLanguage(path: path) == .markdown
+    }
+
+    /// Whether `path` shows rendered rather than as source.
+    func showsReader(_ path: String) -> Bool {
+        isMarkdown(path) && !sourcePaths.contains(path)
+    }
+
+    func setShowsReader(_ showsReader: Bool, for path: String) {
+        if showsReader { sourcePaths.remove(path) } else { sourcePaths.insert(path) }
+    }
+
     var currentLine: Int { selectedLines.lowerBound }
 
     /// The active file with its selected lines, e.g. `src/app.ts:12-18`, for pasting into an agent prompt.
@@ -264,5 +279,6 @@ final class FilesModel {
     private func forget(_ path: String) {
         loadTasks.removeValue(forKey: path)?.cancel()
         loaded[path] = nil
+        sourcePaths.remove(path)
     }
 }

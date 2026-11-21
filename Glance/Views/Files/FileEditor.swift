@@ -18,7 +18,9 @@ struct FileEditor: View {
             EditorTabBar(files: files)
 
             HStack(spacing: 0) {
-                if let content = files.activeContent, let language, let path = files.activePath {
+                if let content = files.activeContent, let path = files.activePath, files.showsReader(path) {
+                    MarkdownView(path: path, content: content, files: files)
+                } else if let content = files.activeContent, let language, let path = files.activePath {
                     CodeView(path: path, content: content, language: language, files: files, scroll: scroll) {
                         model.copy($0, as: .path)
                     }
@@ -33,11 +35,16 @@ struct FileEditor: View {
 
             StatusBar {
                 let content = files.activeContent
-                Text(content == nil ? "Line 0, Column 0" : "Line \(files.currentLine), Column \(files.currentColumn)")
-                if content != nil, files.selectedLines.count > 1 {
+                let isReading = files.activePath.map(files.showsReader) ?? false
+                if isReading {
+                    Text(content.map { "\($0.lines.count) lines" } ?? "")
+                } else {
+                    Text(content == nil ? "Line 0, Column 0" : "Line \(files.currentLine), Column \(files.currentColumn)")
+                }
+                if content != nil, !isReading, files.selectedLines.count > 1 {
                     Text("\(files.selectedLines.count) lines selected")
                 }
-                Text(language?.rawValue ?? "—")
+                Text(isReading ? "Markdown Preview" : language?.rawValue ?? "—")
                 if let content {
                     if let indentation = content.indentation { Text(indentation) }
                     Text("UTF-8 · \(content.lineEnding)")
@@ -57,6 +64,12 @@ struct FileEditor: View {
             if let path = files.activePath {
                 Breadcrumbs(path: path)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                if files.isMarkdown(path) {
+                    PillPicker(
+                        selection: Binding(get: { files.showsReader(path) }, set: { files.setShowsReader($0, for: path) }),
+                        items: [.init(true, "Preview"), .init(false, "Source")]
+                    )
+                }
                 if let status = files.status(of: path) {
                     Button {
                         model.showDiff(forPath: path)

@@ -34,7 +34,7 @@ enum SourceLanguage: String {
         case "tsx": self = .tsx
         case "js", "mjs", "cjs", "jsx": self = .javaScript
         case "json": self = .json
-        case "md": self = .markdown
+        case "md", "markdown": self = .markdown
         case "yml", "yaml": self = .yaml
         case "example", "env": self = .properties
         case "sh", "bash", "zsh": self = .shell
