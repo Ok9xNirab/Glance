@@ -4,7 +4,20 @@
 //
 
 import AppKit
+import Observation
 import SwiftUI
+
+/// Where the code view is scrolled, in lines, so the minimap can follow it and scroll it.
+@Observable
+final class EditorScroll {
+    /// The fractional lines at the top and bottom of the visible area, counted from 0.
+    var top: Double = 0
+    var bottom: Double = 0
+    /// Scrolls the code view so this fractional line is at the top.
+    @ObservationIgnored var scrollTo: (Double) -> Void = { _ in }
+
+    var visibleLines: Double { bottom - top }
+}
 
 /// The read-only source view: a text view, so a selection can span lines and copy with ⌘C,
 /// with a gutter of line numbers and change bars. Right-click copies the path with the selected lines.
@@ -13,11 +26,12 @@ struct CodeView: NSViewRepresentable {
     let content: FileContent
     let language: SourceLanguage
     let files: FilesModel
+    let scroll: EditorScroll
     let copy: (String) -> Void
     @Environment(\.glanceAccent) private var accent
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(files: files)
+        Coordinator(files: files, scroll: scroll)
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -29,9 +43,8 @@ struct CodeView: NSViewRepresentable {
         textView.backgroundColor = NSColor(Palette.window)
         textView.textContainerInset = NSSize(width: 0, height: 8)
         textView.textContainer?.lineFragmentPadding = 0
-        // Lines wrap to the view's width. A finite height: TextKit fails to draw with CGFloat.greatestFiniteMagnitude.
-        textView.textContainer?.widthTracksTextView = true
-        textView.textContainer?.containerSize = NSSize(width: 0, height: 1_000_000_000)
+        // Lines wrap short of the view's width, which `CodeTextView` keeps the container at.
+        textView.textContainer?.widthTracksTextView = false
         textView.isHorizontallyResizable = false
         textView.isVerticallyResizable = true
         textView.maxSize = NSSize(width: 1_000_000, height: 1_000_000_000)
@@ -51,6 +64,7 @@ struct CodeView: NSViewRepresentable {
         scrollView.rulersVisible = true
 
         context.coordinator.textView = textView
+        context.coordinator.observe(scrollView)
         textView.copyPath = { [weak coordinator = context.coordinator] includingLines in
             coordinator?.copyPath(includingLines: includingLines)
         }
@@ -61,6 +75,7 @@ struct CodeView: NSViewRepresentable {
         let coordinator = context.coordinator
         coordinator.files = files
         coordinator.copy = copy
+        coordinator.scroll = scroll
         guard let textView = coordinator.textView else { return }
         textView.selectedTextAttributes = [.backgroundColor: NSColor(accent.opacity(0.22))]
 
@@ -84,8 +99,65 @@ struct CodeView: NSViewRepresentable {
         /// The lines last written to the model, so selection changes that come from the model can be told apart.
         private(set) var reportedLines: ClosedRange<Int>?
 
-        init(files: FilesModel) {
+        var scroll: EditorScroll {
+            didSet { if scroll !== oldValue { connect() } }
+        }
+
+        init(files: FilesModel, scroll: EditorScroll) {
             self.files = files
+            self.scroll = scroll
+            super.init()
+            connect()
+        }
+
+        private func connect() {
+            scroll.scrollTo = { [weak self] line in self?.scroll(toLine: line) }
+            reportScroll()
+        }
+
+        func observe(_ scrollView: NSScrollView) {
+            scrollView.contentView.postsBoundsChangedNotifications = true
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(reportScroll),
+                name: NSView.boundsDidChangeNotification, object: scrollView.contentView
+            )
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(textViewDidResize),
+                name: NSView.frameDidChangeNotification, object: scrollView.documentView
+            )
+        }
+
+        private var isReporting = false
+        private var isReportPending = false
+
+        /// Measuring lines lays text out, which resizes the text view, so a resize reports once layout has finished.
+        @objc private func textViewDidResize() {
+            guard !isReportPending else { return }
+            isReportPending = true
+            DispatchQueue.main.async { [weak self] in
+                self?.isReportPending = false
+                self?.reportScroll()
+            }
+        }
+
+        /// Tells the minimap which lines are showing.
+        @objc func reportScroll() {
+            guard !isReporting, let textView, let visible = textView.enclosingScrollView?.contentView.bounds else { return }
+            isReporting = true
+            defer { isReporting = false }
+            let top = textView.fractionalLine(at: visible.minY)
+            let bottom = textView.fractionalLine(at: visible.maxY)
+            if scroll.top != top { scroll.top = top }
+            if scroll.bottom != bottom { scroll.bottom = bottom }
+        }
+
+        private func scroll(toLine line: Double) {
+            guard let textView, let scrollView = textView.enclosingScrollView else { return }
+            let clip = scrollView.contentView
+            let maxY = max(0, textView.frame.height - clip.bounds.height)
+            let y = line <= 0 ? 0 : min(max(textView.y(ofFractionalLine: line), 0), maxY)
+            clip.scroll(to: NSPoint(x: clip.bounds.minX, y: y))
+            scrollView.reflectScrolledClipView(clip)
         }
 
         func load(_ path: String, content: FileContent, language: SourceLanguage) {
@@ -97,6 +169,7 @@ struct CodeView: NSViewRepresentable {
             textView.show(content, as: language)
             textView.scroll(.zero)
             textView.moveCaret(toLine: line)
+            reportScroll()
         }
 
         /// Shows the same file's new contents where the old ones were, keeping the scroll position and selection.
@@ -113,6 +186,7 @@ struct CodeView: NSViewRepresentable {
             let location = min(selection.location, length)
             textView.setSelectedRange(NSRange(location: location, length: min(selection.length, length - location)))
             scrollView.verticalRulerView?.needsDisplay = true
+            reportScroll()
         }
 
         func copyPath(includingLines: Bool) {
@@ -144,7 +218,17 @@ final class CodeTextView: NSTextView {
     /// The UTF-16 offset where each line starts.
     private var lineStarts = [0]
 
+    /// Room left between the end of a wrapped line and the minimap.
+    static let trailingMargin: CGFloat = 28
+
     var lineCount: Int { lineStarts.count }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        // A finite height: TextKit fails to draw with CGFloat.greatestFiniteMagnitude.
+        let size = NSSize(width: max(newSize.width - Self.trailingMargin, 40), height: 1_000_000_000)
+        if textContainer?.size != size { textContainer?.size = size }
+    }
 
     func show(_ content: FileContent, as language: SourceLanguage) {
         marks = content.marks
@@ -222,6 +306,22 @@ final class CodeTextView: NSTextView {
             }
         }
         return NSRect(x: 0, y: origin.y + rect.minY, width: bounds.width, height: rect.height)
+    }
+
+    /// The line at `y` in the view, from 0, with the fraction of the way down it.
+    func fractionalLine(at y: CGFloat) -> Double {
+        let probe = NSRect(x: 0, y: y, width: bounds.width, height: 1)
+        guard let line = lines(in: probe)?.lowerBound else { return 0 }
+        let rect = lineRect(line)
+        let fraction = rect.height > 0 ? min(max((y - rect.minY) / rect.height, 0), 1) : 0
+        return Double(line - 1) + Double(fraction)
+    }
+
+    /// The `y` in the view where the fractional line from 0 begins.
+    func y(ofFractionalLine line: Double) -> CGFloat {
+        let whole = min(max(Int(line.rounded(.down)), 0), lineCount - 1)
+        let rect = lineRect(whole + 1)
+        return rect.minY + CGFloat(min(max(line - Double(whole), 0), 1)) * rect.height
     }
 
     /// The lines with a row inside `rect`, in the view's coordinates.

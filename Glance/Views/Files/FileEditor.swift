@@ -9,6 +9,7 @@ import SwiftUI
 struct FileEditor: View {
     let files: FilesModel
     @Environment(AppModel.self) private var model
+    @State private var scroll = EditorScroll()
 
     var body: some View {
         let language = files.activePath.map { SourceLanguage(path: $0) }
@@ -18,10 +19,10 @@ struct FileEditor: View {
 
             HStack(spacing: 0) {
                 if let content = files.activeContent, let language, let path = files.activePath {
-                    CodeView(path: path, content: content, language: language, files: files) {
+                    CodeView(path: path, content: content, language: language, files: files, scroll: scroll) {
                         model.copy($0, as: .path)
                     }
-                    Minimap(content: content)
+                    Minimap(content: content, scroll: scroll)
                 } else if let message = files.activeMessage {
                     PaneMessage(message)
                 } else {
@@ -188,33 +189,91 @@ private struct EditorTab: View {
     }
 }
 
-/// A scaled-down outline of the file, with changed lines tinted.
+/// A scaled-down outline of the file, with changed lines tinted. Like Xcode's, it shades the lines in view,
+/// scrolls along with a file too long to fit, and clicking or dragging it scrolls the code.
 private struct Minimap: View {
     let content: FileContent
+    let scroll: EditorScroll
+    /// How far below the viewport's top the drag took hold of it, or `nil` when not dragging.
+    @State private var grab: CGFloat?
+
+    private static let rowHeight: CGFloat = 3
+    private static let inset = EdgeInsets(top: 10, leading: 8, bottom: 10, trailing: 8)
 
     var body: some View {
-        // Drawn rather than laid out, and only as far as it shows, since a real file can run to thousands of lines.
-        Canvas { context, size in
-            for (index, line) in content.lines.prefix(Int(size.height / 3) + 1).enumerated() {
-                let indent = line.prefix { $0 == " " || $0 == "\t" }.reduce(0) { $0 + ($1 == "\t" ? 4 : 1) }
-                let length = line.trimmingCharacters(in: .whitespaces).count
-                guard length > 0 else { continue }
-                let rect = CGRect(x: CGFloat(min(indent, 30)) * 1.1, y: CGFloat(index) * 3, width: CGFloat(min(length, 62)) * 1.1, height: 2)
-                context.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(content.marks[index + 1]?.barColor ?? Palette.minimapLine))
+        GeometryReader { proxy in
+            let layout = Layout(lines: content.lines.count, scroll: scroll, height: proxy.size.height - Self.inset.top - Self.inset.bottom)
+            ZStack(alignment: .topLeading) {
+                Palette.minimapViewport
+                    .frame(height: layout.viewportHeight + 4)
+                    .offset(y: Self.inset.top - 2 + layout.viewportTop)
+                // Drawn rather than laid out, and only as far as it shows, since a real file can run to thousands of lines.
+                Canvas { context, size in
+                    let first = max(0, Int(layout.offset / Self.rowHeight))
+                    let last = min(content.lines.count, first + Int(size.height / Self.rowHeight) + 2)
+                    guard first < last else { return }
+                    for index in first..<last {
+                        let line = content.lines[index]
+                        let indent = line.prefix { $0 == " " || $0 == "\t" }.reduce(0) { $0 + ($1 == "\t" ? 4 : 1) }
+                        let length = line.trimmingCharacters(in: .whitespaces).count
+                        guard length > 0 else { continue }
+                        let rect = CGRect(
+                            x: CGFloat(min(indent, 30)) * 1.1, y: CGFloat(index) * Self.rowHeight - layout.offset,
+                            width: CGFloat(min(length, 62)) * 1.1, height: 2
+                        )
+                        context.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(content.marks[index + 1]?.barColor ?? Palette.minimapLine))
+                    }
+                }
+                .padding(Self.inset)
             }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { drag in
+                        let y = drag.location.y - Self.inset.top
+                        if grab == nil {
+                            let top = layout.viewportTop
+                            // Grabbing the viewport keeps hold of it where it was taken; elsewhere, it centers there.
+                            grab = (top...(top + layout.viewportHeight)).contains(y) ? y - top : layout.viewportHeight / 2
+                        }
+                        scroll.scrollTo(layout.line(forViewportTop: y - (grab ?? 0)))
+                    }
+                    .onEnded { _ in grab = nil }
+            )
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 10)
-        .frame(width: 92, alignment: .topLeading)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .background(alignment: .top) {
-            Palette.minimapViewport
-                .frame(height: CGFloat(min(content.lines.count, 40) * 3 + 4))
-                .padding(.top, 8)
-        }
+        .frame(width: 92)
         .clipped()
         .overlay(alignment: .leading) { Hairline(axis: .vertical) }
         .accessibilityHidden(true)
+    }
+
+    /// Where the outline and viewport sit. The viewport moves like a scroller's knob: from the top of the outline
+    /// to the bottom of what shows of it, and a file too long to fit scrolls the outline along with it.
+    private struct Layout {
+        let viewportTop: CGFloat
+        let viewportHeight: CGFloat
+        /// How far the outline is scrolled up.
+        let offset: CGFloat
+        private let track: CGFloat
+        private let scrollableLines: Double
+
+        init(lines: Int, scroll: EditorScroll, height: CGFloat) {
+            let row = Minimap.rowHeight
+            let outline = CGFloat(lines) * row
+            viewportHeight = CGFloat(scroll.visibleLines) * row
+            scrollableLines = max(Double(lines) - scroll.visibleLines, 0)
+            let overflow = max(outline - height, 0)
+            track = max(scrollableLines * row - overflow, 0)
+            let progress = scrollableLines > 0 ? min(max(scroll.top / scrollableLines, 0), 1) : 0
+            offset = progress * overflow
+            viewportTop = progress * track
+        }
+
+        func line(forViewportTop top: CGFloat) -> Double {
+            guard track > 0 else { return 0 }
+            return Double(min(max(top / track, 0), 1)) * scrollableLines
+        }
     }
 }
 
